@@ -17,7 +17,7 @@ import {
   type Coordinate,
 } from '@/lib/geo';
 import { getSupabase, isSupabaseConfigured } from '@/lib/supabase';
-import type { Game, RulesPenalties } from '@/types/domain';
+import type { Game, RolesRequired, RulesPenalties } from '@/types/domain';
 
 export default function MatchFinderScreen() {
   const router = useRouter();
@@ -58,10 +58,11 @@ export default function MatchFinderScreen() {
       .gte('scheduled_at', new Date().toISOString())
       .order('scheduled_at', { ascending: true });
     if (error) throw new Error(error.message);
-    // Narrow the JSONB `rules_penalties` column into its typed shape.
+    // Narrow the JSONB columns into their typed shapes.
     return (data ?? []).map((row) => ({
       ...row,
       rules_penalties: row.rules_penalties as unknown as RulesPenalties,
+      roles_required: row.roles_required as unknown as RolesRequired,
     }));
   }, []);
 

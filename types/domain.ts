@@ -26,6 +26,15 @@ export interface RulesPenalties {
 }
 
 /**
+ * `games.roles_required`
+ * `{ referee: boolean, timekeeper: boolean }`
+ */
+export interface RolesRequired {
+  referee: boolean;
+  timekeeper: boolean;
+}
+
+/**
  * `game_events.event_data`, discriminated by `event_type`.
  */
 export interface ScoreChangeData {
@@ -60,12 +69,13 @@ export type EventDataMap = {
   game_end: GameEndData;
 };
 
-/** Typed view of a game row with the JSONB column narrowed. */
+/** Typed view of a game row with the JSONB columns narrowed. */
 export type Game = Omit<
   Database['public']['Tables']['games']['Row'],
-  'rules_penalties' | 'status'
+  'rules_penalties' | 'roles_required' | 'status'
 > & {
   rules_penalties: RulesPenalties;
+  roles_required: RolesRequired;
   status: GameStatus;
 };
 

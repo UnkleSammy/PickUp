@@ -57,6 +57,8 @@ export interface Database {
           court_name: string;
           scheduled_at: string;
           status: Database['public']['Enums']['game_status'];
+          roles_required: Json;
+          player_limit: number | null;
           created_at: string;
         };
         Insert: {
@@ -70,6 +72,8 @@ export interface Database {
           court_name: string;
           scheduled_at: string;
           status?: Database['public']['Enums']['game_status'];
+          roles_required?: Json;
+          player_limit?: number | null;
           created_at?: string;
         };
         Update: {
@@ -83,6 +87,8 @@ export interface Database {
           court_name?: string;
           scheduled_at?: string;
           status?: Database['public']['Enums']['game_status'];
+          roles_required?: Json;
+          player_limit?: number | null;
           created_at?: string;
         };
         Relationships: [
