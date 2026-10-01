@@ -1,0 +1,15 @@
+{
+  "expo": {
+    "name": "PickUp",
+    "slug": "pickup",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "scheme": "pickup",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": false,
+    "ios": {
+      "supportsTablet": true
+    },
+    "plugins": ["expo-router"]
+  }
+}
