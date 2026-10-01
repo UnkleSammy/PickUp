@@ -193,6 +193,7 @@ export interface Database {
           target_id: string | null;
           target_court: string | null;
           rating_score: number | null;
+          no_show: boolean;
           comment: string | null;
           created_at: string;
         };
@@ -203,6 +204,7 @@ export interface Database {
           target_id?: string | null;
           target_court?: string | null;
           rating_score?: number | null;
+          no_show?: boolean;
           comment?: string | null;
           created_at?: string;
         };
@@ -213,6 +215,7 @@ export interface Database {
           target_id?: string | null;
           target_court?: string | null;
           rating_score?: number | null;
+          no_show?: boolean;
           comment?: string | null;
           created_at?: string;
         };

@@ -26,23 +26,25 @@ import type {
   GameStatus,
   InviteStatus,
   ParticipantRole,
+  RatingRow,
   RolesRequired,
   RulesPenalties,
 } from '@/types/domain';
 
 type GamesRow = Database['public']['Tables']['games']['Row'];
 
-/** A participant row joined with its profile (username + avatar). */
+/** A participant row joined with its profile (username, avatar, trust score). */
 interface Participant extends GameParticipantRow {
-  profiles: { username: string; avatar_url: string | null } | null;
+  profiles: { username: string; avatar_url: string | null; trust_score: number } | null;
 }
 
 // --- Status progression the host can drive -----------------------------------------
-// MVP flow: scheduling -> lobby -> live. 'completed' / 'cancelled' are set elsewhere
-// (or in a later slice); the host has no control for them here.
+// scheduling -> lobby -> live -> completed. 'cancelled' is set elsewhere (a later
+// slice); the host has no control for it here.
 const NEXT_STATUS: Partial<Record<GameStatus, { next: GameStatus; label: string }>> = {
   scheduling: { next: 'lobby', label: 'Open lobby' },
   lobby: { next: 'live', label: 'Start game (go live)' },
+  live: { next: 'completed', label: 'End game' },
 };
 
 const ROLE_OPTIONS: ParticipantRole[] = ['player', 'referee', 'timekeeper'];
@@ -126,6 +128,13 @@ export default function GameLobbyScreen() {
   // Mutation busy flags (only one mutation at a time keeps UX predictable).
   const [joining, setJoining] = useState(false);
 
+  // --- Post-game ratings state ----------------------------------------------------
+  const [myRatings, setMyRatings] = useState<RatingRow[]>([]);
+  const [ratingDrafts, setRatingDrafts] = useState<
+    Record<string, { stars: number; noShow: boolean }>
+  >({});
+  const [submittingRatings, setSubmittingRatings] = useState(false);
+
   const [inlineError, setInlineError] = useState<string | null>(null);
   const [toast, setToast] = useState<{ message: string; tone: 'error' | 'success' } | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -174,7 +183,7 @@ export default function GameLobbyScreen() {
     const supabase = getSupabase();
     const { data, error } = await supabase
       .from('game_participants')
-      .select('*, profiles(username, avatar_url)')
+      .select('*, profiles(username, avatar_url, trust_score)')
       .eq('game_id', id)
       .order('joined_at', { ascending: true });
     if (error) throw new Error(error.message);
@@ -190,6 +199,20 @@ export default function GameLobbyScreen() {
       // if this fetch races or fails.
     }
   }, [fetchParticipants]);
+
+  // Ratings this user has already cast for the current game (used to hide already-
+  // rated players and prevent duplicate submits).
+  const fetchMyRatings = useCallback(async (): Promise<RatingRow[]> => {
+    if (!id || !user) return [];
+    const supabase = getSupabase();
+    const { data, error } = await supabase
+      .from('ratings')
+      .select('*')
+      .eq('game_id', id)
+      .eq('rater_id', user.id);
+    if (error) throw new Error(error.message);
+    return (data ?? []) as RatingRow[];
+  }, [id, user]);
 
   const loadGame = useCallback(async (): Promise<Game | null> => {
     if (!id) return null;
@@ -279,6 +302,24 @@ export default function GameLobbyScreen() {
     };
   }, [id, refreshParticipants]);
 
+  // Load the current user's existing ratings once the game is completed, so the
+  // UI can hide players they've already rated.
+  useEffect(() => {
+    if (!id || !user || !isSupabaseConfigured) return;
+    if (game?.status !== 'completed') return;
+    let active = true;
+    fetchMyRatings()
+      .then((rows) => {
+        if (active) setMyRatings(rows);
+      })
+      .catch(() => {
+        // Best-effort; a later submit still succeeds and re-fetches.
+      });
+    return () => {
+      active = false;
+    };
+  }, [id, user, game?.status, fetchMyRatings]);
+
   const isHost = user != null && game != null && user.id === game.host_id;
   const currentParticipant = useMemo(
     () => participants.find((p) => p.user_id === user?.id) ?? null,
@@ -319,6 +360,80 @@ export default function GameLobbyScreen() {
     !isHost &&
     currentParticipant == null &&
     (game.status === 'scheduling' || game.status === 'lobby');
+
+  // --- Post-game ratings derivation & handlers --------------------------------------
+  const canRate = game?.status === 'completed' && currentParticipant?.status === 'checked_in';
+
+  const ratedTargetIds = useMemo(
+    () => new Set(myRatings.map((r) => r.target_id).filter((t): t is string => t != null)),
+    [myRatings],
+  );
+
+  const ratableTargets = useMemo(() => {
+    if (!canRate) return [];
+    return participants.filter(
+      (p) =>
+        p.status === 'checked_in' &&
+        p.user_id !== user?.id &&
+        !ratedTargetIds.has(p.user_id),
+    );
+  }, [canRate, participants, user, ratedTargetIds]);
+
+  const draftFor = useCallback(
+    (targetId: string): { stars: number; noShow: boolean } =>
+      ratingDrafts[targetId] ?? { stars: 5, noShow: false },
+    [ratingDrafts],
+  );
+
+  const setDraft = useCallback(
+    (targetId: string, patch: Partial<{ stars: number; noShow: boolean }>) => {
+      setRatingDrafts((prev) => {
+        const current = prev[targetId] ?? { stars: 5, noShow: false };
+        return { ...prev, [targetId]: { ...current, ...patch } };
+      });
+    },
+    [],
+  );
+
+  const handleSubmitRatings = useCallback(async () => {
+    if (!id || !user || ratableTargets.length === 0 || submittingRatings) return;
+    setSubmittingRatings(true);
+    setInlineError(null);
+    const result = await withErrorNotification(
+      async () => {
+        const supabase = getSupabase();
+        const rows = ratableTargets.map((p) => {
+          const draft = draftFor(p.user_id);
+          return {
+            game_id: id,
+            rater_id: user.id,
+            target_id: p.user_id,
+            rating_score: draft.stars,
+            no_show: draft.noShow,
+          };
+        });
+        const { error } = await supabase.from('ratings').insert(rows);
+        if (error) throw new Error(error.message);
+        const refreshed = await fetchMyRatings();
+        setMyRatings(refreshed);
+        setRatingDrafts({});
+        await refreshParticipants();
+      },
+      notifyError,
+    );
+    setSubmittingRatings(false);
+    if (!result.error) showToast('Ratings submitted — thanks!', 'success');
+  }, [
+    id,
+    user,
+    ratableTargets,
+    submittingRatings,
+    draftFor,
+    fetchMyRatings,
+    refreshParticipants,
+    notifyError,
+    showToast,
+  ]);
 
   // --- Mutations --------------------------------------------------------------------
   const handleJoin = useCallback(async () => {
@@ -391,7 +506,13 @@ export default function GameLobbyScreen() {
       notifyError,
     );
     if (!result.error) {
-      showToast(step.next === 'live' ? 'Game is live' : 'Lobby opened', 'success');
+      const message =
+        step.next === 'live'
+          ? 'Game is live'
+          : step.next === 'completed'
+            ? 'Game ended — ratings are open'
+            : 'Lobby opened';
+      showToast(message, 'success');
     }
   }, [id, game, notifyError, showToast]);
 
@@ -623,6 +744,96 @@ export default function GameLobbyScreen() {
           </View>
         ) : null}
 
+        {/* Post-game ratings */}
+        {game.status === 'completed' && currentParticipant?.status === 'checked_in' ? (
+          <View className="px-5 pt-4">
+            <Text className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-400">
+              Rate players
+            </Text>
+            <View className="rounded-2xl border border-gray-200 p-4">
+              {ratableTargets.length === 0 ? (
+                <Text className="text-sm text-gray-500">
+                  {myRatings.length > 0
+                    ? 'You’ve rated everyone — thanks for the feedback!'
+                    : 'No other checked-in players to rate.'}
+                </Text>
+              ) : (
+                <>
+                  <Text className="text-xs leading-5 text-gray-400">
+                    Tap a star (1–5) for each player. Marking someone a no-show overrides the
+                    stars and counts as a 1 in their trust score.
+                  </Text>
+                  <View className="mt-3 space-y-3">
+                    {ratableTargets.map((p) => {
+                      const draft = draftFor(p.user_id);
+                      return (
+                        <View key={p.id} className="rounded-xl bg-gray-50 p-3">
+                          <View className="flex-row items-center justify-between">
+                            <Text className="text-sm font-semibold text-gray-900">
+                              {p.profiles?.username ?? 'Player'}
+                            </Text>
+                            <Text className="text-xs font-semibold text-brand-600">
+                              {draft.noShow ? 'No-show (1)' : `${draft.stars}/5`}
+                            </Text>
+                          </View>
+
+                          <View className={`mt-2 flex-row gap-1.5 ${draft.noShow ? 'opacity-40' : ''}`}>
+                            {[1, 2, 3, 4, 5].map((n) => {
+                              const filled = !draft.noShow && n <= draft.stars;
+                              return (
+                                <Pressable
+                                  key={n}
+                                  onPress={() => setDraft(p.user_id, { stars: n, noShow: false })}
+                                  className="flex-1 items-center justify-center rounded-lg bg-white py-2"
+                                >
+                                  <Text className={`text-lg ${filled ? 'text-amber-400' : 'text-gray-300'}`}>
+                                    ★
+                                  </Text>
+                                </Pressable>
+                              );
+                            })}
+                          </View>
+
+                          <Pressable
+                            onPress={() => setDraft(p.user_id, { noShow: !draft.noShow })}
+                            className={`mt-2 items-center justify-center rounded-lg py-2 ${
+                              draft.noShow ? 'bg-red-100' : 'bg-gray-100'
+                            }`}
+                          >
+                            <Text
+                              className={`text-xs font-semibold ${
+                                draft.noShow ? 'text-red-600' : 'text-gray-600'
+                              }`}
+                            >
+                              {draft.noShow ? '✓ Marked no-show (tap to undo)' : 'Mark as no-show'}
+                            </Text>
+                          </Pressable>
+                        </View>
+                      );
+                    })}
+                  </View>
+
+                  <Pressable
+                    onPress={handleSubmitRatings}
+                    disabled={submittingRatings}
+                    className={`mt-3 items-center justify-center rounded-xl py-3 ${
+                      submittingRatings ? 'bg-gray-200' : 'bg-brand-500'
+                    }`}
+                  >
+                    {submittingRatings ? (
+                      <ActivityIndicator color="#ffffff" />
+                    ) : (
+                      <Text className="text-sm font-semibold text-white">
+                        Submit ratings ({ratableTargets.length})
+                      </Text>
+                    )}
+                  </Pressable>
+                </>
+              )}
+            </View>
+          </View>
+        ) : null}
+
         {/* Roster */}
         <View className="px-5 pt-5">
           <Text className="mb-3 text-sm font-semibold text-gray-400">
@@ -645,10 +856,19 @@ export default function GameLobbyScreen() {
                     url={participant.profiles?.avatar_url ?? null}
                   />
                   <View className="ml-3 flex-1">
-                    <Text className="text-sm font-semibold text-gray-900">
-                      {participant.profiles?.username ?? 'Player'}
-                      {participant.user_id === user?.id ? ' (you)' : ''}
-                    </Text>
+                    <View className="flex-row items-center gap-2">
+                      <Text className="text-sm font-semibold text-gray-900">
+                        {participant.profiles?.username ?? 'Player'}
+                        {participant.user_id === user?.id ? ' (you)' : ''}
+                      </Text>
+                      {participant.profiles?.trust_score != null ? (
+                        <View className="rounded-full bg-brand-50 px-2 py-0.5">
+                          <Text className="text-xs font-semibold text-brand-700">
+                            {Number(participant.profiles.trust_score).toFixed(1)}
+                          </Text>
+                        </View>
+                      ) : null}
+                    </View>
                     <View className="mt-0.5 flex-row items-center gap-2">
                       <Text className="text-xs text-gray-500">{statusLabel(participant.status)}</Text>
                       <Text className="text-xs text-gray-300">·</Text>
