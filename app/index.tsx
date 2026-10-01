@@ -51,7 +51,7 @@ export default function AuthScreen() {
       return 'Password must be at least 6 characters.';
     }
     if (mode === 'sign-up' && !isValidUsername(username)) {
-      return 'Username must be at least 3 characters.';
+      return 'Username must be 3–20 characters using letters, numbers, or underscores only.';
     }
     return null;
   }, [email, password, username, mode]);

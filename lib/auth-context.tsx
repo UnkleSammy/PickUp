@@ -22,7 +22,7 @@ interface AuthContextValue {
   loading: boolean;
   configured: boolean;
   signIn: (email: string, password: string) => Promise<void>;
-  signUp: (email: string, password: string, username?: string) => Promise<SignUpResult>;
+  signUp: (email: string, password: string, username: string) => Promise<SignUpResult>;
   signOut: () => Promise<void>;
 }
 
@@ -69,13 +69,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const signUp = useCallback(
-    async (email: string, password: string, username?: string): Promise<SignUpResult> => {
+    async (email: string, password: string, username: string): Promise<SignUpResult> => {
       const supabase = getSupabase();
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
         options: {
-          data: username ? { username } : undefined,
+          data: { username },
         },
       });
       if (error) throw new Error(authErrorMessage(error));
