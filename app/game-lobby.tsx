@@ -1,8 +1,9 @@
 import { Pressable, ScrollView, Text, View } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 
 export default function GameLobbyScreen() {
   const router = useRouter();
+  const { id } = useLocalSearchParams<{ id?: string }>();
 
   return (
     <View className="flex-1 bg-white">
@@ -14,7 +15,9 @@ export default function GameLobbyScreen() {
       <ScrollView className="flex-1 px-5 py-6">
         <Text className="text-xs font-semibold uppercase tracking-wide text-gray-400">Participants</Text>
         <View className="mt-3 items-center justify-center rounded-2xl border border-dashed border-gray-200 py-10">
-          <Text className="text-gray-400">Roster placeholder — coming soon.</Text>
+          <Text className="text-gray-400">
+            {id ? `Roster for game ${id} — coming soon.` : 'Roster placeholder — coming soon.'}
+          </Text>
         </View>
       </ScrollView>
 
