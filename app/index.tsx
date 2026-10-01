@@ -14,6 +14,7 @@ import { useRouter } from 'expo-router';
 
 import { withErrorNotification } from '@/lib/async-mutation';
 import { useAuth } from '@/lib/auth-context';
+import { toErrorMessage } from '@/lib/errors';
 import { SUPABASE_CONFIG_ERROR } from '@/lib/supabase';
 import { isValidEmail, isValidPassword, isValidUsername } from '@/lib/validation';
 
@@ -80,14 +81,19 @@ export default function AuthScreen() {
           router.replace('/dashboard');
         }
       } else {
-        const { data, error } = await withErrorNotification(
-          () => signUp(email.trim(), password, username.trim()),
-          notifyError,
-        );
-        if (!error && data?.needsConfirmation) {
-          const message = 'Check your inbox to confirm your email, then sign in.';
-          setInfoMessage(message);
-          Alert.alert('Confirm your email', message);
+        try {
+          const result = await signUp(email.trim(), password, username.trim());
+          if (result.status === 'error') {
+            notifyError(result.message);
+          } else if (result.status === 'signed_in') {
+            router.replace('/dashboard');
+          } else {
+            const message = 'Account created — check your email to confirm before signing in.';
+            setInfoMessage(message);
+            Alert.alert('Check your email', message);
+          }
+        } catch (err) {
+          notifyError(toErrorMessage(err));
         }
       }
     } finally {

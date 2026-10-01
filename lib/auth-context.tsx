@@ -12,9 +12,10 @@ import type { Session, User } from '@supabase/supabase-js';
 import { authErrorMessage } from './errors';
 import { getSupabase, isSupabaseConfigured } from './supabase';
 
-export interface SignUpResult {
-  needsConfirmation: boolean;
-}
+export type SignUpResult =
+  | { status: 'signed_in' }
+  | { status: 'confirm_email' }
+  | { status: 'error'; message: string };
 
 interface AuthContextValue {
   session: Session | null;
@@ -78,8 +79,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           data: { username },
         },
       });
-      if (error) throw new Error(authErrorMessage(error));
-      return { needsConfirmation: data.session === null };
+      if (error) {
+        return { status: 'error', message: authErrorMessage(error) };
+      }
+      // With email confirmation ON, signUp succeeds but returns `session: null`
+      // (the user must click the confirmation link before signing in).
+      return data.session ? { status: 'signed_in' } : { status: 'confirm_email' };
     },
     [],
   );
