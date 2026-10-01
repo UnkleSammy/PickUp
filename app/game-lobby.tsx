@@ -702,7 +702,7 @@ export default function GameLobbyScreen() {
             onPress={() => router.push({ pathname: '/live-match', params: { id: game.id } })}
             className="flex-1 items-center justify-center rounded-xl bg-brand-500 py-3"
           >
-            <Text className="text-sm font-semibold text-white">Enter Live Hub</Text>
+            <Text className="text-sm font-semibold text-white">Enter Live Match</Text>
           </Pressable>
         ) : null}
       </View>
