@@ -14,20 +14,22 @@ module.exports = {
   theme: {
     extend: {
       colors: {
-        // Primary brand — "Court Navy": royal blue (athletic energy) ramping to
-        // deep navy (credibility/trust). `brand-500` is the primary action color;
-        // `brand-600/700` are legible text on light surfaces; `brand-800/900` are ink.
+        // Primary brand — "Street Court": a warm near-black charcoal scale (the
+        // "black = credible" layer) with a subtle sage/asphalt undertone. Light warm-gray
+        // tints (50–300) are surfaces/chips/avatars/disabled; mid-charcoal (400–500) is
+        // icons, buttons, borders — `brand-500` carries white text; near-black ink
+        // (600–900) is text. Ratios are computed (WCAG 2.x) in design/IDENTITY.md.
         brand: {
-          50: '#EEF3FF',
-          100: '#DCE7FF',
-          200: '#B9CCF8',
-          300: '#8FA9EA',
-          400: '#5E7FD8',
-          500: '#2F56C7',
-          600: '#1E42AC',
-          700: '#173287',
-          800: '#112463',
-          900: '#0C1846',
+          50: '#F3F5F3',
+          100: '#E5E9E6',
+          200: '#D0D7D2',
+          300: '#AAB3AE',
+          400: '#6E7973',
+          500: '#46514B',
+          600: '#3A4340',
+          700: '#1B211E',
+          800: '#121613',
+          900: '#0B0E0C',
         },
 
         // Accent — "Volt": the flash/energy layer. Backgrounds and large graphics only.
