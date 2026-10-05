@@ -5,6 +5,7 @@ import {
   Pressable,
   ScrollView,
   Text,
+  TextInput,
   View,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -127,6 +128,14 @@ export default function GameLobbyScreen() {
 
   // Mutation busy flags (only one mutation at a time keeps UX predictable).
   const [joining, setJoining] = useState(false);
+
+  // --- Host invite / approval state ----------------------------------------------
+  const [inviteSearch, setInviteSearch] = useState('');
+  const [inviteResults, setInviteResults] = useState<{ id: string; username: string }[]>([]);
+  const [inviteRole, setInviteRole] = useState<ParticipantRole>('player');
+  const [searching, setSearching] = useState(false);
+  const [invitingId, setInvitingId] = useState<string | null>(null);
+  const [resolvingRequestId, setResolvingRequestId] = useState<string | null>(null);
 
   // --- Post-game ratings state ----------------------------------------------------
   const [myRatings, setMyRatings] = useState<RatingRow[]>([]);
@@ -326,6 +335,24 @@ export default function GameLobbyScreen() {
     [participants, user],
   );
 
+  // Pending join requests the host can approve/decline (self-requested rows still
+  // sitting in 'invited'). Host-sent invites (host_invited = true) are NOT listed
+  // here — those are answered by the invitee from their dashboard.
+  const pendingRequests = useMemo(
+    () => participants.filter((p) => !p.host_invited && p.status === 'invited'),
+    [participants],
+  );
+
+  // Search results minus anyone already on the roster (re-inviting would hit the
+  // UNIQUE(game_id, user_id) constraint).
+  const inviteeCandidates = useMemo(
+    () =>
+      inviteResults.filter(
+        (profile) => !participants.some((participant) => participant.user_id === profile.id),
+      ),
+    [inviteResults, participants],
+  );
+
   // --- Check-in eligibility ---------------------------------------------------------
   // Interpretation of the 30-minute window: enabled while
   // -30 <= minutesUntilStart <= 30, i.e. from 30 minutes before the scheduled start
@@ -440,29 +467,35 @@ export default function GameLobbyScreen() {
     if (!id || !user || joining) return;
     setJoining(true);
     setInlineError(null);
+    // Gated games land as a join *request* the host must approve; open games
+    // join straight to 'accepted' (the DB RLS enforces the same invariants).
+    const approvalRequired = game?.require_approval === true;
     try {
       const result = await withErrorNotification(
         async () => {
           const supabase = getSupabase();
-          // Self-service join — no approval gate in this MVP. A participant is
-          // inserted straight to 'accepted'; a future invite/approval flow would
-          // insert 'invited' instead and let the host accept it.
           const { error } = await supabase.from('game_participants').insert({
             game_id: id,
             user_id: user.id,
             role: 'player',
-            status: 'accepted',
+            host_invited: false,
+            status: approvalRequired ? 'invited' : 'accepted',
           });
           if (error) throw new Error(error.message);
           await refreshParticipants();
         },
         notifyError,
       );
-      if (!result.error) showToast('You joined the game', 'success');
+      if (!result.error) {
+        showToast(
+          approvalRequired ? 'Request sent — awaiting host approval' : 'You joined the game',
+          'success',
+        );
+      }
     } finally {
       setJoining(false);
     }
-  }, [id, user, joining, refreshParticipants, notifyError, showToast]);
+  }, [id, user, joining, game?.require_approval, refreshParticipants, notifyError, showToast]);
 
   const handleRoleChange = useCallback(
     async (participantId: string, role: ParticipantRole) => {
@@ -534,6 +567,86 @@ export default function GameLobbyScreen() {
     );
     if (!result.error) showToast('Checked in — see you there!', 'success');
   }, [id, user, currentParticipant, canCheckIn, refreshParticipants, notifyError, showToast]);
+
+  // --- Host invite / approval mutations -------------------------------------------
+  const handleSearchInvitees = useCallback(async () => {
+    const q = inviteSearch.trim();
+    if (!q || !id) return;
+    setSearching(true);
+    setInlineError(null);
+    try {
+      const supabase = getSupabase();
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('id, username')
+        .ilike('username', `%${q}%`)
+        .order('username', { ascending: true })
+        .limit(10);
+      if (error) throw new Error(error.message);
+      setInviteResults(
+        (data ?? []).filter((profile) => profile.id !== user?.id),
+      );
+    } catch (err) {
+      notifyError(toErrorMessage(err));
+    } finally {
+      setSearching(false);
+    }
+  }, [inviteSearch, id, user, notifyError]);
+
+  const handleInvite = useCallback(
+    async (userId: string, username: string) => {
+      if (!id || !isHost || invitingId) return;
+      setInvitingId(userId);
+      setInlineError(null);
+      const result = await withErrorNotification(
+        async () => {
+          const supabase = getSupabase();
+          const { error } = await supabase.from('game_participants').insert({
+            game_id: id,
+            user_id: userId,
+            role: inviteRole,
+            status: 'invited',
+            host_invited: true,
+          });
+          if (error) throw new Error(error.message);
+          await refreshParticipants();
+        },
+        notifyError,
+      );
+      setInvitingId(null);
+      if (!result.error) {
+        showToast(`Invited ${username} as ${roleLabel(inviteRole).toLowerCase()}`, 'success');
+        setInviteResults((prev) => prev.filter((profile) => profile.id !== userId));
+      }
+    },
+    [id, isHost, invitingId, inviteRole, refreshParticipants, notifyError, showToast],
+  );
+
+  const handleResolveRequest = useCallback(
+    async (participantId: string, status: 'accepted' | 'declined') => {
+      if (!id || !isHost || resolvingRequestId) return;
+      setResolvingRequestId(participantId);
+      setInlineError(null);
+      const result = await withErrorNotification(
+        async () => {
+          const supabase = getSupabase();
+          const { error } = await supabase
+            .from('game_participants')
+            .update({ status })
+            .eq('id', participantId)
+            .eq('game_id', id);
+          if (error) throw new Error(error.message);
+          await refreshParticipants();
+        },
+        notifyError,
+      );
+      setResolvingRequestId(null);
+      if (!result.error) {
+        showToast(status === 'accepted' ? 'Player approved' : 'Request declined', 'success');
+      }
+    },
+    [id, isHost, resolvingRequestId, refreshParticipants, notifyError, showToast],
+  );
 
   // --- Render -----------------------------------------------------------------------
   if (authLoading || (loading && isSupabaseConfigured)) {
@@ -667,6 +780,142 @@ export default function GameLobbyScreen() {
           </View>
         ) : null}
 
+        {/* Pending join requests (host) */}
+        {isHost && pendingRequests.length > 0 ? (
+          <View className="px-5 pt-4">
+            <Text className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-400">
+              Join requests ({pendingRequests.length})
+            </Text>
+            <View className="space-y-2">
+              {pendingRequests.map((request) => (
+                <View
+                  key={request.id}
+                  className="flex-row items-center justify-between rounded-2xl border border-gray-200 p-3"
+                >
+                  <View className="flex-1 pr-3">
+                    <Text className="text-sm font-semibold text-gray-900">
+                      {request.profiles?.username ?? 'Player'}
+                    </Text>
+                    <Text className="mt-0.5 text-xs text-gray-500">Requested to join</Text>
+                  </View>
+                  <View className="flex-row gap-2">
+                    <Pressable
+                      onPress={() => handleResolveRequest(request.id, 'declined')}
+                      disabled={resolvingRequestId === request.id}
+                      className="items-center justify-center rounded-lg bg-gray-100 px-3 py-2"
+                    >
+                      <Text className="text-sm font-semibold text-gray-700">Decline</Text>
+                    </Pressable>
+                    <Pressable
+                      onPress={() => handleResolveRequest(request.id, 'accepted')}
+                      disabled={resolvingRequestId === request.id}
+                      className="items-center justify-center rounded-lg bg-brand-500 px-3 py-2"
+                    >
+                      {resolvingRequestId === request.id ? (
+                        <ActivityIndicator color="#ffffff" />
+                      ) : (
+                        <Text className="text-sm font-semibold text-white">Approve</Text>
+                      )}
+                    </Pressable>
+                  </View>
+                </View>
+              ))}
+            </View>
+          </View>
+        ) : null}
+
+        {/* Invite players (host) */}
+        {isHost ? (
+          <View className="px-5 pt-4">
+            <Text className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-400">
+              Invite players
+            </Text>
+            <View className="rounded-2xl border border-gray-200 p-4">
+              <View className="flex-row gap-2">
+                <TextInput
+                  value={inviteSearch}
+                  onChangeText={(text) => {
+                    setInviteSearch(text);
+                    if (text.trim().length === 0) setInviteResults([]);
+                  }}
+                  placeholder="Search by username"
+                  returnKeyType="search"
+                  onSubmitEditing={handleSearchInvitees}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  className="flex-1 rounded-xl border border-gray-300 bg-white px-3 py-2 text-base text-gray-900"
+                  placeholderTextColor="#9ca3af"
+                />
+                <Pressable
+                  onPress={handleSearchInvitees}
+                  disabled={searching}
+                  className="items-center justify-center rounded-xl bg-gray-100 px-4 py-2"
+                >
+                  {searching ? (
+                    <ActivityIndicator color="#4f46e5" />
+                  ) : (
+                    <Text className="text-sm font-semibold text-gray-700">Search</Text>
+                  )}
+                </Pressable>
+              </View>
+
+              <View className="mt-3 flex-row items-center gap-2">
+                <Text className="text-xs font-medium text-gray-500">Invite as</Text>
+                {ROLE_OPTIONS.map((role) => {
+                  const selected = inviteRole === role;
+                  return (
+                    <Pressable
+                      key={role}
+                      onPress={() => setInviteRole(role)}
+                      className={`rounded-full px-2.5 py-1 ${
+                        selected ? 'bg-brand-500' : 'bg-gray-100'
+                      }`}
+                    >
+                      <Text
+                        className={`text-xs font-semibold ${
+                          selected ? 'text-white' : 'text-gray-600'
+                        }`}
+                      >
+                        {roleLabel(role)}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+
+              {inviteeCandidates.length > 0 ? (
+                <View className="mt-3 space-y-2">
+                  {inviteeCandidates.map((profile) => (
+                    <View
+                      key={profile.id}
+                      className="flex-row items-center justify-between rounded-xl bg-gray-50 px-3 py-2"
+                    >
+                      <Text className="flex-1 pr-3 text-sm font-semibold text-gray-900">
+                        {profile.username}
+                      </Text>
+                      <Pressable
+                        onPress={() => handleInvite(profile.id, profile.username)}
+                        disabled={invitingId === profile.id}
+                        className="items-center justify-center rounded-lg bg-brand-500 px-3 py-1.5"
+                      >
+                        {invitingId === profile.id ? (
+                          <ActivityIndicator color="#ffffff" />
+                        ) : (
+                          <Text className="text-sm font-semibold text-white">Invite</Text>
+                        )}
+                      </Pressable>
+                    </View>
+                  ))}
+                </View>
+              ) : inviteSearch.trim().length > 0 ? (
+                <Text className="mt-3 text-sm text-gray-400">
+                  No players found. Try another username.
+                </Text>
+              ) : null}
+            </View>
+          </View>
+        ) : null}
+
         {/* Join CTA */}
         {!isHost && currentParticipant == null ? (
           <View className="px-5 pt-4">
@@ -682,7 +931,7 @@ export default function GameLobbyScreen() {
                   <ActivityIndicator color="#ffffff" />
                 ) : (
                   <Text className={`text-base font-semibold ${isFull ? 'text-gray-500' : 'text-white'}`}>
-                    {isFull ? 'Game is full' : 'Join game'}
+                    {isFull ? 'Game is full' : game.require_approval ? 'Request to join' : 'Join game'}
                   </Text>
                 )}
               </Pressable>

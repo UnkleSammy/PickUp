@@ -59,6 +59,7 @@ export interface Database {
           status: Database['public']['Enums']['game_status'];
           roles_required: Json;
           player_limit: number | null;
+          require_approval: boolean;
           created_at: string;
         };
         Insert: {
@@ -74,6 +75,7 @@ export interface Database {
           status?: Database['public']['Enums']['game_status'];
           roles_required?: Json;
           player_limit?: number | null;
+          require_approval?: boolean;
           created_at?: string;
         };
         Update: {
@@ -89,6 +91,7 @@ export interface Database {
           status?: Database['public']['Enums']['game_status'];
           roles_required?: Json;
           player_limit?: number | null;
+          require_approval?: boolean;
           created_at?: string;
         };
         Relationships: [
@@ -108,6 +111,7 @@ export interface Database {
           user_id: string;
           role: Database['public']['Enums']['participant_role'];
           status: Database['public']['Enums']['invite_status'];
+          host_invited: boolean;
           joined_at: string;
         };
         Insert: {
@@ -116,6 +120,7 @@ export interface Database {
           user_id: string;
           role?: Database['public']['Enums']['participant_role'];
           status?: Database['public']['Enums']['invite_status'];
+          host_invited?: boolean;
           joined_at?: string;
         };
         Update: {
@@ -124,6 +129,7 @@ export interface Database {
           user_id?: string;
           role?: Database['public']['Enums']['participant_role'];
           status?: Database['public']['Enums']['invite_status'];
+          host_invited?: boolean;
           joined_at?: string;
         };
         Relationships: [
