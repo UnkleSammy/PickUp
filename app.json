@@ -10,6 +10,14 @@
     "ios": {
       "supportsTablet": true
     },
-    "plugins": ["expo-router"]
+    "plugins": [
+      "expo-router",
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "PickUp uses your location to find nearby pickup games and to verify court check-in."
+        }
+      ]
+    ]
   }
 }

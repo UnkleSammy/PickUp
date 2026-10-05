@@ -3,11 +3,15 @@
  * best-effort device geolocation resolver that gracefully falls back to a
  * fixed coordinate when the host environment cannot provide a real location.
  *
- * Native devices will get real geolocation via `expo-location` in a later
- * slice; the resolver below already uses the web `navigator.geolocation` API
- * when it is present (Expo web), so the fallback is the only thing wired for
- * native right now.
+ * Native devices (iOS/Android) get real geolocation via `expo-location`; the
+ * web build (Expo web) uses the browser `navigator.geolocation` API. When a
+ * real fix is unavailable — permission denied, timeout, or unsupported
+ * environment — the resolver returns {@link DEFAULT_USER_LOCATION} with
+ * `isFallback: true` so callers can degrade gracefully instead of crashing.
  */
+
+import * as Location from 'expo-location';
+import { Platform } from 'react-native';
 
 export interface Coordinate {
   latitude: number;
@@ -24,6 +28,9 @@ export const DEFAULT_USER_LOCATION: Coordinate = {
 };
 
 const EARTH_RADIUS_M = 6_371_000;
+
+/** How long to wait for a native location fix before falling back to the mock. */
+const NATIVE_LOCATION_TIMEOUT_MS = 10_000;
 
 function toRadians(degrees: number): number {
   return (degrees * Math.PI) / 180;
@@ -58,6 +65,33 @@ export interface LocationResolution {
   isFallback: boolean;
 }
 
+/**
+ * Rejects `promise` if it does not settle within `ms` milliseconds. Guards
+ * against `expo-location`'s `getCurrentPositionAsync` (which has no timeout
+ * option) hanging on a cold GPS fix.
+ */
+function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error('Location request timed out')), ms);
+    promise.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (error) => {
+        clearTimeout(timer);
+        reject(error);
+      },
+    );
+  });
+}
+
+const FALLBACK_RESOLUTION: LocationResolution = {
+  coordinate: DEFAULT_USER_LOCATION,
+  isFallback: true,
+};
+
+/** Browser path (Expo web): `navigator.geolocation`, if present. */
 function resolveFromGeolocationLike(): Promise<LocationResolution> {
   const scope = globalThis as unknown as {
     navigator?: { geolocation?: GeolocationLike };
@@ -65,7 +99,7 @@ function resolveFromGeolocationLike(): Promise<LocationResolution> {
   const geolocation = scope.navigator?.geolocation;
 
   if (!geolocation) {
-    return Promise.resolve({ coordinate: DEFAULT_USER_LOCATION, isFallback: true });
+    return Promise.resolve(FALLBACK_RESOLUTION);
   }
 
   return new Promise<LocationResolution>((resolve) => {
@@ -78,26 +112,55 @@ function resolveFromGeolocationLike(): Promise<LocationResolution> {
           },
           isFallback: false,
         }),
-      () => resolve({ coordinate: DEFAULT_USER_LOCATION, isFallback: true }),
+      () => resolve(FALLBACK_RESOLUTION),
       { timeout: 5_000, maximumAge: 300_000 },
     );
   });
 }
 
-/**
- * Resolves the user's location when the host environment exposes
- * `navigator.geolocation` (Expo web). Falls back to {@link DEFAULT_USER_LOCATION}
- * on denial, timeout, or unsupported environments (native without expo-location).
- */
-export async function getUserLocation(): Promise<Coordinate> {
-  return (await resolveFromGeolocationLike()).coordinate;
+/** Native path (iOS/Android): `expo-location` foreground fix. */
+async function resolveFromExpoLocation(): Promise<LocationResolution> {
+  try {
+    const { status } = await Location.requestForegroundPermissionsAsync();
+    if (status !== 'granted') {
+      return FALLBACK_RESOLUTION;
+    }
+
+    const position = await withTimeout(
+      Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }),
+      NATIVE_LOCATION_TIMEOUT_MS,
+    );
+
+    return {
+      coordinate: {
+        latitude: position.coords.latitude,
+        longitude: position.coords.longitude,
+      },
+      isFallback: false,
+    };
+  } catch {
+    // Permission denial, timeout, missing provider, etc. — degrade to the mock.
+    return FALLBACK_RESOLUTION;
+  }
 }
 
 /**
- * Like {@link getUserLocation}, but also reports whether the result is the
- * fixed fallback (no real device fix). Used to degrade "nearest first" sorting
- * gracefully when the user hasn't granted, or can't provide, a location.
+ * Resolves the user's location via the native `expo-location` API on iOS/Android
+ * and via `navigator.geolocation` on Expo web. Falls back to
+ * {@link DEFAULT_USER_LOCATION} on denial, timeout, or unsupported environments.
  */
 export async function resolveUserLocation(): Promise<LocationResolution> {
+  if (Platform.OS === 'ios' || Platform.OS === 'android') {
+    return resolveFromExpoLocation();
+  }
   return resolveFromGeolocationLike();
+}
+
+/**
+ * Thin wrapper over {@link resolveUserLocation} returning only the coordinate
+ * (dropping the `isFallback` flag). Used by callers that just need a location
+ * and treat any coordinate — real or mock — the same way.
+ */
+export async function getUserLocation(): Promise<Coordinate> {
+  return (await resolveUserLocation()).coordinate;
 }
