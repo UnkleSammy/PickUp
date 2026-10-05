@@ -46,9 +46,11 @@ function Chip({ label, active, onPress }: ChipProps) {
   return (
     <Pressable
       onPress={onPress}
-      className={`rounded-full px-4 py-2 ${active ? 'bg-brand-500' : 'bg-gray-100'}`}
+      className={`rounded-full px-4 py-2 ${active ? 'bg-brand-500' : 'bg-muted-soft'}`}
     >
-      <Text className={`text-sm font-medium ${active ? 'text-white' : 'text-gray-700'}`}>
+      <Text
+        className={`font-sans-500 text-label ${active ? 'text-white' : 'text-muted-ink'}`}
+      >
         {label}
       </Text>
     </Pressable>
@@ -69,7 +71,7 @@ export default function GameFilters({
   return (
     <View className="mt-5 space-y-4">
       <View>
-        <Text className="mb-2 px-5 text-xs font-semibold uppercase tracking-wide text-gray-400">
+        <Text className="mb-2 px-5 font-sans-600 text-caption uppercase tracking-wide text-brand-600">
           Sport
         </Text>
         <ScrollView
@@ -92,7 +94,7 @@ export default function GameFilters({
       </View>
 
       <View>
-        <Text className="mb-2 px-5 text-xs font-semibold uppercase tracking-wide text-gray-400">
+        <Text className="mb-2 px-5 font-sans-600 text-caption uppercase tracking-wide text-brand-600">
           Skill Level
         </Text>
         <ScrollView
@@ -115,7 +117,7 @@ export default function GameFilters({
       </View>
 
       <View>
-        <Text className="mb-2 px-5 text-xs font-semibold uppercase tracking-wide text-gray-400">
+        <Text className="mb-2 px-5 font-sans-600 text-caption uppercase tracking-wide text-brand-600">
           Distance
         </Text>
         <ScrollView

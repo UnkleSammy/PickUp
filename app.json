@@ -17,7 +17,8 @@
         {
           "locationWhenInUsePermission": "PickUp uses your location to find nearby pickup games and to verify court check-in."
         }
-      ]
+      ],
+      "expo-font"
     ]
   }
 }
