@@ -178,6 +178,7 @@ export default function CreateGameScreen() {
   const [refereeRequired, setRefereeRequired] = useState(false);
   const [timekeeperRequired, setTimekeeperRequired] = useState(false);
   const [playerLimit, setPlayerLimit] = useState(0); // 0 = no limit
+  const [requireApproval, setRequireApproval] = useState(false);
 
   // Step 4 — Location & time
   const [latitude, setLatitude] = useState<number | null>(null);
@@ -358,6 +359,7 @@ export default function CreateGameScreen() {
                 timekeeper: timekeeperRequired,
               } satisfies RolesRequired,
               player_limit: playerLimit > 0 ? playerLimit : null,
+              require_approval: requireApproval,
             })
             .select('id')
             .single();
@@ -391,6 +393,7 @@ export default function CreateGameScreen() {
     refereeRequired,
     timekeeperRequired,
     playerLimit,
+    requireApproval,
     notifyError,
     showToast,
     router,
@@ -609,6 +612,12 @@ export default function CreateGameScreen() {
                 onIncrement={() => setPlayerLimit((n) => Math.min(MAX_PLAYER_LIMIT, n + 1))}
                 canDecrement={playerLimit > 0}
                 canIncrement={playerLimit < MAX_PLAYER_LIMIT}
+              />
+              <ToggleRow
+                label="Require approval"
+                hint="Players must be approved before joining"
+                value={requireApproval}
+                onValueChange={setRequireApproval}
               />
             </View>
           ) : null}

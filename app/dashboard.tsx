@@ -17,15 +17,39 @@ import {
   type Coordinate,
 } from '@/lib/geo';
 import { getSupabase, isSupabaseConfigured } from '@/lib/supabase';
-import type { Game, RolesRequired, RulesPenalties } from '@/types/domain';
+import type { Game, ParticipantRole, RolesRequired, RulesPenalties } from '@/types/domain';
+
+/** A participant row in 'invited' joined with its game summary. */
+interface Invitation {
+  id: string;
+  game_id: string;
+  role: ParticipantRole;
+  host_invited: boolean;
+  games: { sport: string; court_name: string; scheduled_at: string } | null;
+}
+
+/** Hermes-safe compact date formatter for invitations. */
+function formatInviteWhen(iso: string): string {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return '';
+  const hour12 = date.getHours() % 12 || 12;
+  const minutes = date.getMinutes().toString().padStart(2, '0');
+  const ampm = date.getHours() >= 12 ? 'PM' : 'AM';
+  return `${date.getMonth() + 1}/${date.getDate()} · ${hour12}:${minutes} ${ampm}`;
+}
 
 export default function MatchFinderScreen() {
   const router = useRouter();
-  const { signOut } = useAuth();
+  const { user, signOut } = useAuth();
 
   const [games, setGames] = useState<Game[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Invitations this user has received (status = 'invited').
+  const [invitations, setInvitations] = useState<Invitation[]>([]);
+  const [inviteError, setInviteError] = useState<string | null>(null);
+  const [resolvingInviteId, setResolvingInviteId] = useState<string | null>(null);
 
   const [selectedSport, setSelectedSport] = useState<string | null>(null);
   const [selectedSkillLevel, setSelectedSkillLevel] = useState<string | null>(null);
@@ -117,6 +141,92 @@ export default function MatchFinderScreen() {
     };
   }, []);
 
+  // --- Invitations (status = 'invited' for the current user) ----------------------
+  const fetchInvitations = useCallback(async (): Promise<Invitation[]> => {
+    if (!user) return [];
+    const supabase = getSupabase();
+    const { data, error } = await supabase
+      .from('game_participants')
+      .select('id, game_id, role, host_invited, games(sport, court_name, scheduled_at)')
+      .eq('user_id', user.id)
+      .eq('status', 'invited')
+      .order('joined_at', { ascending: false });
+    if (error) throw new Error(error.message);
+    return (data ?? []) as unknown as Invitation[];
+  }, [user]);
+
+  // Load invitations once, then keep them in sync via realtime (new invites and
+  // approvals/declines made elsewhere both refresh the list).
+  useEffect(() => {
+    if (!user || !isSupabaseConfigured) {
+      setInvitations([]);
+      return;
+    }
+    let active = true;
+    fetchInvitations()
+      .then((rows) => {
+        if (active) setInvitations(rows);
+      })
+      .catch(() => {
+        if (active) setInviteError('Could not load invitations.');
+      });
+
+    const supabase = getSupabase();
+    const refresh = () => {
+      void fetchInvitations()
+        .then((rows) => {
+          if (active) setInvitations(rows);
+        })
+        .catch(() => {
+          /* best-effort refresh */
+        });
+    };
+    const channel = supabase
+      .channel(`dashboard:invitations:${user.id}`)
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'game_participants', filter: `user_id=eq.${user.id}` },
+        refresh,
+      )
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'game_participants', filter: `user_id=eq.${user.id}` },
+        refresh,
+      )
+      .subscribe();
+
+    return () => {
+      active = false;
+      void supabase.removeChannel(channel);
+    };
+  }, [user, fetchInvitations]);
+
+  const handleResolveInvitation = useCallback(
+    async (invitationId: string, status: 'accepted' | 'declined') => {
+      if (!user || resolvingInviteId) return;
+      setResolvingInviteId(invitationId);
+      setInviteError(null);
+      try {
+        const supabase = getSupabase();
+        const { error } = await supabase
+          .from('game_participants')
+          .update({ status })
+          .eq('id', invitationId)
+          .eq('user_id', user.id);
+        if (error) throw new Error(error.message);
+        // Optimistically drop the row; the realtime refresh reconciles the rest.
+        setInvitations((prev) => prev.filter((inv) => inv.id !== invitationId));
+      } catch (err) {
+        setInviteError(
+          err instanceof Error && err.message.trim() ? err.message : 'Could not respond to invite.',
+        );
+      } finally {
+        setResolvingInviteId(null);
+      }
+    },
+    [user, resolvingInviteId],
+  );
+
   // Distinct sport values, derived from the listed games only.
   const sports = useMemo(() => {
     const distinct = new Set<string>();
@@ -158,6 +268,73 @@ export default function MatchFinderScreen() {
       </View>
 
       <ScrollView className="flex-1" contentContainerStyle={{ paddingBottom: 24 }}>
+        {/* Invitations */}
+        {invitations.length > 0 ? (
+          <View className="px-5 pt-4">
+            <Text className="mb-2 text-sm font-semibold text-gray-400">
+              Your invitations ({invitations.length})
+            </Text>
+            <View className="space-y-2">
+              {invitations.map((invitation) => (
+                <View key={invitation.id} className="rounded-2xl border border-gray-200 p-4">
+                  <View className="flex-row items-center justify-between">
+                    <View className="flex-1 pr-3">
+                      <Text className="text-sm font-semibold text-gray-900">
+                        {invitation.games?.sport ?? 'Game'}
+                        {invitation.games?.court_name ? ` · ${invitation.games.court_name}` : ''}
+                      </Text>
+                      <Text className="mt-0.5 text-xs text-gray-500">
+                        {invitation.games?.scheduled_at
+                          ? formatInviteWhen(invitation.games.scheduled_at)
+                          : ''}
+                      </Text>
+                    </View>
+                    <View
+                      className={`rounded-full px-2.5 py-1 ${
+                        invitation.host_invited ? 'bg-brand-50' : 'bg-amber-50'
+                      }`}
+                    >
+                      <Text
+                        className={`text-xs font-semibold ${
+                          invitation.host_invited ? 'text-brand-700' : 'text-amber-700'
+                        }`}
+                      >
+                        {invitation.host_invited ? 'Invited to play' : 'Awaiting approval'}
+                      </Text>
+                    </View>
+                  </View>
+
+                  {invitation.host_invited ? (
+                    <View className="mt-3 flex-row gap-2">
+                      <Pressable
+                        onPress={() => handleResolveInvitation(invitation.id, 'declined')}
+                        disabled={resolvingInviteId === invitation.id}
+                        className="flex-1 items-center justify-center rounded-xl bg-gray-100 py-2.5"
+                      >
+                        <Text className="text-sm font-semibold text-gray-700">Decline</Text>
+                      </Pressable>
+                      <Pressable
+                        onPress={() => handleResolveInvitation(invitation.id, 'accepted')}
+                        disabled={resolvingInviteId === invitation.id}
+                        className="flex-1 items-center justify-center rounded-xl bg-brand-500 py-2.5"
+                      >
+                        {resolvingInviteId === invitation.id ? (
+                          <ActivityIndicator color="#ffffff" />
+                        ) : (
+                          <Text className="text-sm font-semibold text-white">Accept</Text>
+                        )}
+                      </Pressable>
+                    </View>
+                  ) : null}
+                </View>
+              ))}
+            </View>
+            {inviteError ? (
+              <Text className="mt-2 text-xs text-red-600">{inviteError}</Text>
+            ) : null}
+          </View>
+        ) : null}
+
         <View className="px-5 pt-4">
           <GameMap games={games} userLocation={userLocation} />
         </View>
