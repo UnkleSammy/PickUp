@@ -1,4 +1,7 @@
-import { Text, View } from 'react-native';
+import { useMemo } from 'react';
+import { Platform, StyleSheet, Text, View } from 'react-native';
+import { useRouter } from 'expo-router';
+import MapView, { Callout, Marker } from 'react-native-maps';
 
 import type { Coordinate } from '@/lib/geo';
 import type { Game } from '@/types/domain';
@@ -6,107 +9,171 @@ import type { Game } from '@/types/domain';
 interface GameMapProps {
   games: Game[];
   userLocation: Coordinate;
+  /** When true, `userLocation` is a real device fix (not the fallback mock). */
+  hasRealLocation: boolean;
 }
 
-interface Bounds {
-  minLat: number;
-  maxLat: number;
-  minLng: number;
-  maxLng: number;
-}
+/**
+ * Google Maps on Android requires an API key (injected into the native manifest
+ * via `android.config.googleMaps.apiKey`). Until that secret is provisioned we
+ * only render the native map on iOS (Apple Maps — no key) and on Android when a
+ * key is present. Everywhere else (web, Android without a key) the dashboard
+ * list is the primary surface and we render this fallback panel instead.
+ *
+ * TODO(map-android): add a `GOOGLE_MAPS_API_KEY` secret and wire it through
+ * `app.json` (`android.config.googleMaps.apiKey`) to enable Google Maps on
+ * Android; then this guard can simply become `Platform.OS !== 'web'`.
+ */
+const GOOGLE_MAPS_API_KEY = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY;
 
-const clamp = (value: number, min: number, max: number) =>
-  Math.min(max, Math.max(min, value));
+const styles = StyleSheet.create({
+  map: {
+    width: '100%',
+    height: 200,
+  },
+  pin: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: '#4f46e5',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: '#ffffff',
+  },
+  pinText: {
+    color: '#ffffff',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  userDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: '#10b981',
+    borderWidth: 2,
+    borderColor: '#ffffff',
+  },
+  callout: {
+    width: 180,
+    paddingVertical: 2,
+  },
+  calloutTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#111827',
+  },
+  calloutSubtitle: {
+    fontSize: 12,
+    color: '#6b7280',
+    marginTop: 2,
+  },
+});
 
-/** Projects a coordinate into percentage space within the mock map bounds. */
-function project(coord: Coordinate, bounds: Bounds): { x: number; y: number } {
-  const lngSpan = bounds.maxLng - bounds.minLng || 1;
-  const latSpan = bounds.maxLat - bounds.minLat || 1;
-  return {
-    x: clamp(((coord.longitude - bounds.minLng) / lngSpan) * 100, 8, 92),
-    y: clamp(((bounds.maxLat - coord.latitude) / latSpan) * 100, 10, 86),
+/** Opens the lobby for a game, matching GameCard's tap behaviour. */
+function useOpenLobby() {
+  const router = useRouter();
+  return (gameId: string) => {
+    router.push({ pathname: '/game-lobby', params: { id: gameId } });
   };
 }
 
 /**
- * Mock map container. This is the single swap-in point for a real Mapbox /
- * Google Maps component later — replace the body (and `GameMapProps`) here and
- * the dashboard needs no changes. Dummy markers are projected from the listed
- * games' real lat/lng so the placeholder already behaves map-like.
+ * Real map of the listed games. Renders a sport-initial pin for each game with
+ * a styled callout (court name + sport), and (when a real location is known) a
+ * "you are here" dot. Tapping a pin opens that game's lobby.
  */
-export default function GameMap({ games, userLocation }: GameMapProps) {
-  const points: Coordinate[] = [
-    userLocation,
-    ...games.map((game) => ({ latitude: game.latitude, longitude: game.longitude })),
-  ];
+export default function GameMap({ games, userLocation, hasRealLocation }: GameMapProps) {
+  const openLobby = useOpenLobby();
 
-  const bounds: Bounds = {
-    minLat: Math.min(...points.map((p) => p.latitude)),
-    maxLat: Math.max(...points.map((p) => p.latitude)),
-    minLng: Math.min(...points.map((p) => p.longitude)),
-    maxLng: Math.max(...points.map((p) => p.longitude)),
-  };
+  const canRenderMap =
+    Platform.OS === 'ios' || (Platform.OS === 'android' && Boolean(GOOGLE_MAPS_API_KEY));
 
-  const user = project(userLocation, bounds);
+  // Fit all plotted points; only include the user location when it is a real
+  // fix (the fallback mock coordinate should not drag the map to a fake area).
+  const region = useMemo(() => {
+    const points: Coordinate[] = [];
+    if (hasRealLocation) points.push(userLocation);
+    for (const game of games) points.push({ latitude: game.latitude, longitude: game.longitude });
+
+    if (points.length === 0) {
+      return {
+        latitude: userLocation.latitude,
+        longitude: userLocation.longitude,
+        latitudeDelta: 0.05,
+        longitudeDelta: 0.05,
+      };
+    }
+
+    const lats = points.map((p) => p.latitude);
+    const lngs = points.map((p) => p.longitude);
+    const minLat = Math.min(...lats);
+    const maxLat = Math.max(...lats);
+    const minLng = Math.min(...lngs);
+    const maxLng = Math.max(...lngs);
+
+    return {
+      latitude: (minLat + maxLat) / 2,
+      longitude: (minLng + maxLng) / 2,
+      latitudeDelta: Math.max(maxLat - minLat, 0.02) * 1.6 + 0.02,
+      longitudeDelta: Math.max(maxLng - minLng, 0.02) * 1.6 + 0.02,
+    };
+  }, [games, userLocation, hasRealLocation]);
+
+  if (!canRenderMap) {
+    return (
+      <View className="overflow-hidden rounded-2xl border border-gray-200 bg-gray-50">
+        <View className="flex-row items-center justify-between px-4 py-3">
+          <Text className="text-xs font-semibold uppercase tracking-wide text-gray-400">Map</Text>
+          <Text className="text-[10px] text-gray-400">
+            {Platform.OS === 'android' ? 'Map needs Google Maps key' : 'Map available on device'}
+          </Text>
+        </View>
+        <View className="mx-3 mb-3 h-44 items-center justify-center rounded-xl bg-gray-100">
+          <Text className="px-4 text-center text-xs text-gray-400">
+            {games.length === 0
+              ? 'No games plotted yet'
+              : `${games.length} game${games.length === 1 ? '' : 's'} near you — see the list below`}
+          </Text>
+        </View>
+      </View>
+    );
+  }
 
   return (
-    <View className="overflow-hidden rounded-2xl border border-indigo-100 bg-indigo-50">
+    <View className="overflow-hidden rounded-2xl border border-gray-200 bg-white">
       <View className="flex-row items-center justify-between px-4 py-3">
-        <Text className="text-xs font-semibold uppercase tracking-wide text-indigo-400">
-          Map preview
+        <Text className="text-xs font-semibold uppercase tracking-wide text-gray-400">Map</Text>
+        <Text className="text-[10px] text-gray-400">
+          {games.length} game{games.length === 1 ? '' : 's'} plotted
         </Text>
-        <Text className="text-[10px] text-indigo-300">mock — swap in Mapbox/Google Maps</Text>
       </View>
 
-      <View className="relative mx-3 mb-3 h-44 overflow-hidden rounded-xl bg-indigo-100">
-        {/* Grid lines */}
-        {[25, 50, 75].map((pct) => (
-          <View
-            key={`v${pct}`}
-            className="absolute bottom-0 top-0 w-px bg-indigo-200"
-            style={{ left: `${pct}%` }}
-          />
-        ))}
-        {[33, 66].map((pct) => (
-          <View
-            key={`h${pct}`}
-            className="absolute left-0 right-0 h-px bg-indigo-200"
-            style={{ top: `${pct}%` }}
-          />
-        ))}
-
-        {/* User location marker */}
-        <View className="absolute items-center" style={{ left: `${user.x}%`, top: `${user.y}%` }}>
-          <View className="h-3 w-3 rounded-full border-2 border-white bg-brand-500" />
-          <Text className="mt-0.5 text-[9px] font-bold text-brand-700">You</Text>
-        </View>
-
-        {/* Game markers */}
-        {games.map((game) => {
-          const pos = project(
-            { latitude: game.latitude, longitude: game.longitude },
-            bounds,
-          );
-          return (
-            <View
-              key={game.id}
-              className="absolute items-center"
-              style={{ left: `${pos.x}%`, top: `${pos.y}%` }}
-            >
-              <View className="h-3 w-3 rounded-full border-2 border-white bg-gray-900" />
-              <Text className="mt-0.5 text-[9px] font-semibold text-gray-600">
-                {game.sport.charAt(0).toUpperCase()}
-              </Text>
-            </View>
-          );
-        })}
-
-        {games.length === 0 ? (
-          <View className="absolute inset-0 items-center justify-center">
-            <Text className="text-xs text-indigo-300">No games plotted yet</Text>
-          </View>
+      <MapView style={styles.map} region={region} showsCompass={false}>
+        {hasRealLocation ? (
+          <Marker coordinate={userLocation} anchor={{ x: 0.5, y: 0.5 }}>
+            <View style={styles.userDot} />
+          </Marker>
         ) : null}
-      </View>
+
+        {games.map((game) => (
+          <Marker
+            key={game.id}
+            coordinate={{ latitude: game.latitude, longitude: game.longitude }}
+            onPress={() => openLobby(game.id)}
+          >
+            <View style={styles.pin}>
+              <Text style={styles.pinText}>{game.sport.charAt(0).toUpperCase()}</Text>
+            </View>
+            <Callout onPress={() => openLobby(game.id)}>
+              <View style={styles.callout}>
+                <Text style={styles.calloutTitle}>{game.court_name}</Text>
+                <Text style={styles.calloutSubtitle}>{game.sport}</Text>
+              </View>
+            </Callout>
+          </Marker>
+        ))}
+      </MapView>
     </View>
   );
 }

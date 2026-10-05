@@ -12,8 +12,8 @@ import { withErrorNotification } from '@/lib/async-mutation';
 import { useAuth } from '@/lib/auth-context';
 import {
   DEFAULT_USER_LOCATION,
-  getUserLocation,
   haversineDistanceMeters,
+  resolveUserLocation,
   type Coordinate,
 } from '@/lib/geo';
 import { getSupabase, isSupabaseConfigured } from '@/lib/supabase';
@@ -58,13 +58,17 @@ export default function MatchFinderScreen() {
   );
 
   const [userLocation, setUserLocation] = useState<Coordinate>(DEFAULT_USER_LOCATION);
+  // Whether `userLocation` is a real device fix (false when we only have the fallback mock).
+  const [hasRealLocation, setHasRealLocation] = useState(false);
 
   // Resolve device geolocation once; fall back to a fixed coordinate when the
   // environment can't provide it (native without expo-location, denial, timeout).
   useEffect(() => {
     let active = true;
-    getUserLocation().then((location) => {
-      if (active) setUserLocation(location);
+    resolveUserLocation().then(({ coordinate, isFallback }) => {
+      if (!active) return;
+      setUserLocation(coordinate);
+      setHasRealLocation(!isFallback);
     });
     return () => {
       active = false;
@@ -252,13 +256,18 @@ export default function MatchFinderScreen() {
 
     if (selectedDistance.maxMeters != null) {
       list = list.filter(({ distanceMeters }) => distanceMeters <= selectedDistance.maxMeters!);
-      // A distance radius implies a nearest-first ordering; otherwise keep
-      // scheduled_at ascending (the query order).
+    }
+
+    // Nearest-first when we have a real device location (a distance radius also
+    // implies nearest-first). Without a real fix, keep the server order
+    // (scheduled_at ascending) so the list stays stable instead of sorting
+    // against the fallback mock coordinate.
+    if (hasRealLocation) {
       list = [...list].sort((a, b) => a.distanceMeters - b.distanceMeters);
     }
 
     return list;
-  }, [gamesWithDistance, selectedSport, selectedDistance]);
+  }, [gamesWithDistance, selectedSport, selectedDistance, hasRealLocation]);
 
   return (
     <View className="flex-1 bg-white">
@@ -336,7 +345,7 @@ export default function MatchFinderScreen() {
         ) : null}
 
         <View className="px-5 pt-4">
-          <GameMap games={games} userLocation={userLocation} />
+          <GameMap games={games} userLocation={userLocation} hasRealLocation={hasRealLocation} />
         </View>
 
         <GameFilters

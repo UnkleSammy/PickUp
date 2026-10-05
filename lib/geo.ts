@@ -51,30 +51,53 @@ interface GeolocationLike {
   ) => void;
 }
 
-/**
- * Resolves the user's location when the host environment exposes
- * `navigator.geolocation` (Expo web). Falls back to {@link DEFAULT_USER_LOCATION}
- * on denial, timeout, or unsupported environments (native without expo-location).
- */
-export async function getUserLocation(): Promise<Coordinate> {
+/** Result of resolving the user's location, including whether it was a real fix. */
+export interface LocationResolution {
+  coordinate: Coordinate;
+  /** True when no real device fix was available and we fell back to the mock. */
+  isFallback: boolean;
+}
+
+function resolveFromGeolocationLike(): Promise<LocationResolution> {
   const scope = globalThis as unknown as {
     navigator?: { geolocation?: GeolocationLike };
   };
   const geolocation = scope.navigator?.geolocation;
 
   if (!geolocation) {
-    return DEFAULT_USER_LOCATION;
+    return Promise.resolve({ coordinate: DEFAULT_USER_LOCATION, isFallback: true });
   }
 
-  return new Promise<Coordinate>((resolve) => {
+  return new Promise<LocationResolution>((resolve) => {
     geolocation.getCurrentPosition(
       (position) =>
         resolve({
-          latitude: position.coords.latitude,
-          longitude: position.coords.longitude,
+          coordinate: {
+            latitude: position.coords.latitude,
+            longitude: position.coords.longitude,
+          },
+          isFallback: false,
         }),
-      () => resolve(DEFAULT_USER_LOCATION),
+      () => resolve({ coordinate: DEFAULT_USER_LOCATION, isFallback: true }),
       { timeout: 5_000, maximumAge: 300_000 },
     );
   });
+}
+
+/**
+ * Resolves the user's location when the host environment exposes
+ * `navigator.geolocation` (Expo web). Falls back to {@link DEFAULT_USER_LOCATION}
+ * on denial, timeout, or unsupported environments (native without expo-location).
+ */
+export async function getUserLocation(): Promise<Coordinate> {
+  return (await resolveFromGeolocationLike()).coordinate;
+}
+
+/**
+ * Like {@link getUserLocation}, but also reports whether the result is the
+ * fixed fallback (no real device fix). Used to degrade "nearest first" sorting
+ * gracefully when the user hasn't granted, or can't provide, a location.
+ */
+export async function resolveUserLocation(): Promise<LocationResolution> {
+  return resolveFromGeolocationLike();
 }
