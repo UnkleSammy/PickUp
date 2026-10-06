@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 
+import Button from '@/components/Button';
 import { withErrorNotification } from '@/lib/async-mutation';
 import { useAuth } from '@/lib/auth-context';
 import { toErrorMessage } from '@/lib/errors';
@@ -57,6 +58,38 @@ const STATUS_LABEL: Record<InviteStatus, string> = {
   checked_in: 'Checked in',
 };
 
+// Semantic status tone for the roster/approval chips (design/IDENTITY.md §3):
+// checked-in / joined = success (showed up), invited = warning (pending),
+// declined = danger.
+const STATUS_TONE: Record<InviteStatus, 'success' | 'warning' | 'danger'> = {
+  invited: 'warning',
+  accepted: 'success',
+  declined: 'danger',
+  checked_in: 'success',
+};
+
+function statusChipBg(status: InviteStatus): string {
+  switch (STATUS_TONE[status]) {
+    case 'success':
+      return 'bg-success-soft';
+    case 'danger':
+      return 'bg-danger-soft';
+    default:
+      return 'bg-warning-soft';
+  }
+}
+
+function statusChipText(status: InviteStatus): string {
+  switch (STATUS_TONE[status]) {
+    case 'success':
+      return 'text-success-strong';
+    case 'danger':
+      return 'text-danger-strong';
+    default:
+      return 'text-warning-strong';
+  }
+}
+
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const MONTHS = [
   'Jan',
@@ -103,12 +136,12 @@ function toGame(row: GamesRow): Game {
 
 function Avatar({ username, url }: { username: string | null; url: string | null }) {
   if (url) {
-    return <Image source={{ uri: url }} className="h-10 w-10 rounded-full bg-gray-200" />;
+    return <Image source={{ uri: url }} className="h-10 w-10 rounded-full bg-muted-soft" />;
   }
   const initials = (username ?? '?').trim().slice(0, 2).toUpperCase() || '?';
   return (
     <View className="h-10 w-10 items-center justify-center rounded-full bg-brand-100">
-      <Text className="text-sm font-bold text-brand-700">{initials}</Text>
+      <Text className="font-sans-600 text-label text-brand-700">{initials}</Text>
     </View>
   );
 }
@@ -651,26 +684,30 @@ export default function GameLobbyScreen() {
   // --- Render -----------------------------------------------------------------------
   if (authLoading || (loading && isSupabaseConfigured)) {
     return (
-      <View className="flex-1 items-center justify-center bg-white">
-        <ActivityIndicator size="large" color="#4f46e5" />
+      <View className="flex-1 items-center justify-center bg-brand-50">
+        <ActivityIndicator size="large" color="#46514B" />
       </View>
     );
   }
 
   if (!configured) {
     return (
-      <View className="flex-1 items-center justify-center bg-white px-8">
-        <Text className="text-lg font-bold text-gray-900">PickUp isn&apos;t set up yet</Text>
-        <Text className="mt-3 text-center leading-6 text-gray-500">{SUPABASE_CONFIG_ERROR}</Text>
+      <View className="flex-1 items-center justify-center bg-brand-50 px-8">
+        <Text className="font-display-700 text-heading text-brand-900">
+          PickUp isn&apos;t set up yet
+        </Text>
+        <Text className="mt-3 text-center font-sans text-body text-muted">
+          {SUPABASE_CONFIG_ERROR}
+        </Text>
       </View>
     );
   }
 
   if (!id) {
     return (
-      <View className="flex-1 items-center justify-center bg-white px-8">
-        <Text className="text-lg font-bold text-gray-900">Missing game</Text>
-        <Text className="mt-3 text-center text-gray-500">
+      <View className="flex-1 items-center justify-center bg-brand-50 px-8">
+        <Text className="font-display-700 text-heading text-brand-900">Missing game</Text>
+        <Text className="mt-3 text-center font-sans text-body text-muted">
           No game id was provided. Go back to the Match Finder and open a game from there.
         </Text>
       </View>
@@ -679,14 +716,16 @@ export default function GameLobbyScreen() {
 
   if (error) {
     return (
-      <View className="flex-1 items-center justify-center bg-white px-8">
-        <Text className="text-lg font-bold text-gray-900">Couldn&apos;t load the game</Text>
-        <Text className="mt-3 text-center leading-6 text-gray-500">{error}</Text>
+      <View className="flex-1 items-center justify-center bg-brand-50 px-8">
+        <Text className="font-display-700 text-heading text-brand-900">
+          Couldn&apos;t load the game
+        </Text>
+        <Text className="mt-3 text-center font-sans text-body text-muted">{error}</Text>
         <Pressable
           onPress={() => router.back()}
-          className="mt-6 items-center justify-center rounded-xl border border-gray-200 px-6 py-3"
+          className="mt-6 items-center justify-center rounded-xl border border-muted-border px-6 py-3"
         >
-          <Text className="text-sm font-semibold text-gray-700">Back</Text>
+          <Text className="font-sans-600 text-label text-muted-ink">Back</Text>
         </Pressable>
       </View>
     );
@@ -704,41 +743,45 @@ export default function GameLobbyScreen() {
   const statusStep = NEXT_STATUS[game.status];
 
   return (
-    <View className="flex-1 bg-white">
-      <View className="border-b border-gray-100 px-5 pb-4 pt-16">
-        <Text className="text-2xl font-bold text-gray-900">Game Lobby &amp; Roster</Text>
-        <Text className="mt-1 text-sm text-gray-500">Roster, role assignment, check-in.</Text>
+    <View className="flex-1 bg-brand-50">
+      <View className="border-b border-muted-border bg-brand-50 px-5 pb-4 pt-16">
+        <Text className="font-display-700 text-title text-brand-900">Game Lobby</Text>
+        <Text className="mt-1 font-sans text-body text-muted">
+          Roster, role assignment, check-in.
+        </Text>
       </View>
 
       <ScrollView className="flex-1" contentContainerStyle={{ paddingBottom: 24 }}>
         {/* Game summary */}
         <View className="px-5 pt-5">
-          <View className="rounded-2xl border border-gray-200 bg-white p-4">
+          <View className="rounded-2xl border border-muted-border bg-white p-4">
             <View className="flex-row items-center justify-between">
-              <Text className="text-lg font-bold text-gray-900">{game.sport}</Text>
-              <View className="rounded-full bg-gray-100 px-3 py-1">
-                <Text className="text-xs font-semibold uppercase tracking-wide text-gray-600">
+              <Text className="font-display-700 text-subheading text-brand-900">{game.sport}</Text>
+              <View className="rounded-full bg-brand-100 px-3 py-1">
+                <Text className="font-sans-600 text-caption uppercase tracking-wide text-brand-700">
                   {game.status}
                 </Text>
               </View>
             </View>
 
-            <Text className="mt-1 text-sm font-semibold text-gray-700">{game.court_name}</Text>
-            <Text className="mt-0.5 text-sm text-gray-500">{formatWhen(game.scheduled_at)}</Text>
+            <Text className="mt-1 font-sans-600 text-label text-brand-700">{game.court_name}</Text>
+            <Text className="mt-0.5 font-sans text-body text-muted">{formatWhen(game.scheduled_at)}</Text>
 
-            <View className="mt-3 rounded-xl bg-gray-50 px-3 py-2">
-              <Text className="text-xs font-semibold uppercase tracking-wide text-gray-400">
+            <View className="mt-3 rounded-xl bg-muted-soft px-3 py-2">
+              <Text className="font-sans-600 text-caption uppercase tracking-wide text-brand-600">
                 Roster
               </Text>
-              <Text className="mt-0.5 text-sm font-semibold text-gray-800">{capacityLabel}</Text>
+              <Text className="mt-0.5 font-sans-600 text-label text-muted-ink">{capacityLabel}</Text>
             </View>
 
             <View className="mt-3">
-              <Text className="text-xs font-semibold uppercase tracking-wide text-gray-400">
+              <Text className="font-sans-600 text-caption uppercase tracking-wide text-brand-600">
                 Rules
               </Text>
-              <Text className="mt-1 text-sm leading-5 text-gray-600">{game.rules_text}</Text>
-              <Text className="mt-1 text-sm text-gray-500">
+              <Text className="mt-1 font-sans text-body leading-5 text-brand-600">
+                {game.rules_text}
+              </Text>
+              <Text className="mt-1 font-sans text-body text-muted">
                 Fouls limit {game.rules_penalties.fouls_limit} · {game.rules_penalties.penalty_type}{' '}
                 · {game.rules_penalties.half_duration_mins}-min halves
               </Text>
@@ -746,7 +789,7 @@ export default function GameLobbyScreen() {
 
             {isHost ? (
               <View className="mt-3 rounded-xl bg-brand-50 px-3 py-2">
-                <Text className="text-sm font-semibold text-brand-700">You&apos;re the host</Text>
+                <Text className="font-sans-600 text-label text-brand-700">You&apos;re the host</Text>
               </View>
             ) : null}
           </View>
@@ -755,25 +798,20 @@ export default function GameLobbyScreen() {
         {/* Host controls */}
         {isHost ? (
           <View className="px-5 pt-4">
-            <Text className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-400">
+            <Text className="mb-2 font-sans-600 text-caption uppercase tracking-wide text-brand-600">
               Host controls
             </Text>
-            <View className="rounded-2xl border border-gray-200 p-4">
+            <View className="rounded-2xl border border-muted-border bg-white p-4">
               {statusStep ? (
-                <Pressable
-                  onPress={handleAdvanceStatus}
-                  className="items-center justify-center rounded-xl bg-brand-500 py-3"
-                >
-                  <Text className="text-sm font-semibold text-white">{statusStep.label}</Text>
-                </Pressable>
+                <Button label={statusStep.label} onPress={handleAdvanceStatus} variant="primary" />
               ) : (
-                <View className="items-center justify-center rounded-xl bg-gray-100 py-3">
-                  <Text className="text-sm font-medium text-gray-500">
+                <View className="items-center justify-center rounded-xl bg-muted-soft py-3">
+                  <Text className="font-sans-500 text-label text-muted">
                     Game is {game.status} — no further host steps.
                   </Text>
                 </View>
               )}
-              <Text className="mt-2 text-xs text-gray-400">
+              <Text className="mt-2 font-sans text-caption text-muted">
                 Assign each participant a role below. Roles gate what they can do in the live hub.
               </Text>
             </View>
@@ -783,40 +821,36 @@ export default function GameLobbyScreen() {
         {/* Pending join requests (host) */}
         {isHost && pendingRequests.length > 0 ? (
           <View className="px-5 pt-4">
-            <Text className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-400">
+            <Text className="mb-2 font-sans-600 text-caption uppercase tracking-wide text-brand-600">
               Join requests ({pendingRequests.length})
             </Text>
             <View className="space-y-2">
               {pendingRequests.map((request) => (
                 <View
                   key={request.id}
-                  className="flex-row items-center justify-between rounded-2xl border border-gray-200 p-3"
+                  className="flex-row items-center justify-between rounded-2xl border border-muted-border bg-white p-3"
                 >
                   <View className="flex-1 pr-3">
-                    <Text className="text-sm font-semibold text-gray-900">
+                    <Text className="font-sans-600 text-label text-muted-ink">
                       {request.profiles?.username ?? 'Player'}
                     </Text>
-                    <Text className="mt-0.5 text-xs text-gray-500">Requested to join</Text>
+                    <View className="mt-1 self-start rounded-full bg-warning-soft px-2 py-0.5">
+                      <Text className="font-sans-600 text-micro text-warning-strong">Pending</Text>
+                    </View>
                   </View>
                   <View className="flex-row gap-2">
-                    <Pressable
+                    <Button
+                      label="Decline"
                       onPress={() => handleResolveRequest(request.id, 'declined')}
                       disabled={resolvingRequestId === request.id}
-                      className="items-center justify-center rounded-lg bg-gray-100 px-3 py-2"
-                    >
-                      <Text className="text-sm font-semibold text-gray-700">Decline</Text>
-                    </Pressable>
-                    <Pressable
+                      variant="secondary"
+                    />
+                    <Button
+                      label="Approve"
                       onPress={() => handleResolveRequest(request.id, 'accepted')}
-                      disabled={resolvingRequestId === request.id}
-                      className="items-center justify-center rounded-lg bg-brand-500 px-3 py-2"
-                    >
-                      {resolvingRequestId === request.id ? (
-                        <ActivityIndicator color="#ffffff" />
-                      ) : (
-                        <Text className="text-sm font-semibold text-white">Approve</Text>
-                      )}
-                    </Pressable>
+                      loading={resolvingRequestId === request.id}
+                      variant="primary"
+                    />
                   </View>
                 </View>
               ))}
@@ -827,10 +861,10 @@ export default function GameLobbyScreen() {
         {/* Invite players (host) */}
         {isHost ? (
           <View className="px-5 pt-4">
-            <Text className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-400">
+            <Text className="mb-2 font-sans-600 text-caption uppercase tracking-wide text-brand-600">
               Invite players
             </Text>
-            <View className="rounded-2xl border border-gray-200 p-4">
+            <View className="rounded-2xl border border-muted-border bg-white p-4">
               <View className="flex-row gap-2">
                 <TextInput
                   value={inviteSearch}
@@ -843,24 +877,24 @@ export default function GameLobbyScreen() {
                   onSubmitEditing={handleSearchInvitees}
                   autoCapitalize="none"
                   autoCorrect={false}
-                  className="flex-1 rounded-xl border border-gray-300 bg-white px-3 py-2 text-base text-gray-900"
-                  placeholderTextColor="#9ca3af"
+                  className="flex-1 rounded-xl border border-muted-border bg-white px-3 py-2 font-sans text-body text-muted-ink"
+                  placeholderTextColor="#6B7280"
                 />
                 <Pressable
                   onPress={handleSearchInvitees}
                   disabled={searching}
-                  className="items-center justify-center rounded-xl bg-gray-100 px-4 py-2"
+                  className="items-center justify-center rounded-xl bg-muted-soft px-4 py-2"
                 >
                   {searching ? (
-                    <ActivityIndicator color="#4f46e5" />
+                    <ActivityIndicator color="#46514B" />
                   ) : (
-                    <Text className="text-sm font-semibold text-gray-700">Search</Text>
+                    <Text className="font-sans-600 text-label text-muted-ink">Search</Text>
                   )}
                 </Pressable>
               </View>
 
               <View className="mt-3 flex-row items-center gap-2">
-                <Text className="text-xs font-medium text-gray-500">Invite as</Text>
+                <Text className="font-sans-500 text-caption text-muted">Invite as</Text>
                 {ROLE_OPTIONS.map((role) => {
                   const selected = inviteRole === role;
                   return (
@@ -868,12 +902,12 @@ export default function GameLobbyScreen() {
                       key={role}
                       onPress={() => setInviteRole(role)}
                       className={`rounded-full px-2.5 py-1 ${
-                        selected ? 'bg-brand-500' : 'bg-gray-100'
+                        selected ? 'bg-brand-500' : 'bg-muted-soft'
                       }`}
                     >
                       <Text
-                        className={`text-xs font-semibold ${
-                          selected ? 'text-white' : 'text-gray-600'
+                        className={`font-sans-600 text-caption ${
+                          selected ? 'text-white' : 'text-muted-ink'
                         }`}
                       >
                         {roleLabel(role)}
@@ -888,27 +922,27 @@ export default function GameLobbyScreen() {
                   {inviteeCandidates.map((profile) => (
                     <View
                       key={profile.id}
-                      className="flex-row items-center justify-between rounded-xl bg-gray-50 px-3 py-2"
+                      className="flex-row items-center justify-between rounded-xl bg-muted-soft px-3 py-2"
                     >
-                      <Text className="flex-1 pr-3 text-sm font-semibold text-gray-900">
+                      <Text className="flex-1 pr-3 font-sans-600 text-label text-muted-ink">
                         {profile.username}
                       </Text>
                       <Pressable
                         onPress={() => handleInvite(profile.id, profile.username)}
                         disabled={invitingId === profile.id}
-                        className="items-center justify-center rounded-lg bg-brand-500 px-3 py-1.5"
+                        className="items-center justify-center rounded-lg bg-accent px-3 py-1.5"
                       >
                         {invitingId === profile.id ? (
-                          <ActivityIndicator color="#ffffff" />
+                          <ActivityIndicator color="#0B0E0C" />
                         ) : (
-                          <Text className="text-sm font-semibold text-white">Invite</Text>
+                          <Text className="font-sans-600 text-label text-brand-900">Invite</Text>
                         )}
                       </Pressable>
                     </View>
                   ))}
                 </View>
               ) : inviteSearch.trim().length > 0 ? (
-                <Text className="mt-3 text-sm text-gray-400">
+                <Text className="mt-3 font-sans text-body text-muted">
                   No players found. Try another username.
                 </Text>
               ) : null}
@@ -920,24 +954,21 @@ export default function GameLobbyScreen() {
         {!isHost && currentParticipant == null ? (
           <View className="px-5 pt-4">
             {canJoin ? (
-              <Pressable
-                onPress={handleJoin}
-                disabled={joining || isFull}
-                className={`items-center justify-center rounded-xl py-4 ${
-                  joining || isFull ? 'bg-gray-200' : 'bg-brand-500'
-                }`}
-              >
-                {joining ? (
-                  <ActivityIndicator color="#ffffff" />
-                ) : (
-                  <Text className={`text-base font-semibold ${isFull ? 'text-gray-500' : 'text-white'}`}>
-                    {isFull ? 'Game is full' : game.require_approval ? 'Request to join' : 'Join game'}
-                  </Text>
-                )}
-              </Pressable>
+              isFull ? (
+                <View className="items-center justify-center rounded-xl bg-muted-soft py-4">
+                  <Text className="font-sans-500 text-body text-muted">Game is full</Text>
+                </View>
+              ) : (
+                <Button
+                  label={game.require_approval ? 'Request to join' : 'Join game'}
+                  onPress={handleJoin}
+                  loading={joining}
+                  variant="primary"
+                />
+              )
             ) : (
-              <View className="items-center justify-center rounded-xl bg-gray-100 py-4">
-                <Text className="text-sm font-medium text-gray-500">
+              <View className="items-center justify-center rounded-xl bg-muted-soft py-4">
+                <Text className="font-sans-500 text-body text-muted">
                   {game.status === 'live'
                     ? 'This game is already live.'
                     : 'Joining is closed for this game.'}
@@ -945,7 +976,7 @@ export default function GameLobbyScreen() {
               </View>
             )}
             {isFull ? (
-              <Text className="mt-2 text-center text-xs text-gray-400">
+              <Text className="mt-2 text-center font-sans text-caption text-muted">
                 All {game.player_limit} spots are taken.
               </Text>
             ) : null}
@@ -955,13 +986,13 @@ export default function GameLobbyScreen() {
         {/* Check-in (current user's own participant row) */}
         {currentParticipant ? (
           <View className="px-5 pt-4">
-            <Text className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-400">
+            <Text className="mb-2 font-sans-600 text-caption uppercase tracking-wide text-brand-600">
               Your check-in
             </Text>
-            <View className="rounded-2xl border border-gray-200 p-4">
+            <View className="rounded-2xl border border-muted-border bg-white p-4">
               {currentParticipant.status === 'checked_in' ? (
-                <View className="items-center justify-center rounded-xl bg-emerald-50 py-3">
-                  <Text className="text-sm font-semibold text-emerald-700">✓ Checked in</Text>
+                <View className="items-center justify-center rounded-xl bg-success-soft py-3">
+                  <Text className="font-sans-600 text-label text-success-strong">✓ Checked in</Text>
                 </View>
               ) : (
                 <>
@@ -969,21 +1000,23 @@ export default function GameLobbyScreen() {
                     onPress={handleCheckIn}
                     disabled={!canCheckIn}
                     className={`items-center justify-center rounded-xl py-3 ${
-                      canCheckIn ? 'bg-emerald-500' : 'bg-gray-200'
+                      canCheckIn ? 'bg-success' : 'bg-muted-soft'
                     }`}
                   >
                     <Text
-                      className={`text-sm font-semibold ${canCheckIn ? 'text-white' : 'text-gray-500'}`}
+                      className={`font-sans-600 text-label ${
+                        canCheckIn ? 'text-white' : 'text-muted'
+                      }`}
                     >
                       Check In
                     </Text>
                   </Pressable>
                   {checkInDisabledReason ? (
-                    <Text className="mt-2 text-center text-xs text-gray-500">
+                    <Text className="mt-2 text-center font-sans text-caption text-muted">
                       {checkInDisabledReason}
                     </Text>
                   ) : null}
-                  <Text className="mt-2 text-center text-xs text-gray-400">
+                  <Text className="mt-2 text-center font-sans text-caption text-muted">
                     You&apos;re {Math.round(distanceMeters)} m from the court ·{' '}
                     {Math.round(minutesUntilStart)} min to start
                   </Text>
@@ -996,19 +1029,19 @@ export default function GameLobbyScreen() {
         {/* Post-game ratings */}
         {game.status === 'completed' && currentParticipant?.status === 'checked_in' ? (
           <View className="px-5 pt-4">
-            <Text className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-400">
+            <Text className="mb-2 font-sans-600 text-caption uppercase tracking-wide text-brand-600">
               Rate players
             </Text>
-            <View className="rounded-2xl border border-gray-200 p-4">
+            <View className="rounded-2xl border border-muted-border bg-white p-4">
               {ratableTargets.length === 0 ? (
-                <Text className="text-sm text-gray-500">
+                <Text className="font-sans text-body text-muted">
                   {myRatings.length > 0
                     ? 'You’ve rated everyone — thanks for the feedback!'
                     : 'No other checked-in players to rate.'}
                 </Text>
               ) : (
                 <>
-                  <Text className="text-xs leading-5 text-gray-400">
+                  <Text className="font-sans text-caption leading-5 text-muted">
                     Tap a star (1–5) for each player. Marking someone a no-show overrides the
                     stars and counts as a 1 in their trust score.
                   </Text>
@@ -1016,17 +1049,19 @@ export default function GameLobbyScreen() {
                     {ratableTargets.map((p) => {
                       const draft = draftFor(p.user_id);
                       return (
-                        <View key={p.id} className="rounded-xl bg-gray-50 p-3">
+                        <View key={p.id} className="rounded-xl bg-muted-soft p-3">
                           <View className="flex-row items-center justify-between">
-                            <Text className="text-sm font-semibold text-gray-900">
+                            <Text className="font-sans-600 text-label text-muted-ink">
                               {p.profiles?.username ?? 'Player'}
                             </Text>
-                            <Text className="text-xs font-semibold text-brand-600">
+                            <Text className="font-sans-600 text-caption text-brand-600">
                               {draft.noShow ? 'No-show (1)' : `${draft.stars}/5`}
                             </Text>
                           </View>
 
-                          <View className={`mt-2 flex-row gap-1.5 ${draft.noShow ? 'opacity-40' : ''}`}>
+                          <View
+                            className={`mt-2 flex-row gap-1.5 ${draft.noShow ? 'opacity-40' : ''}`}
+                          >
                             {[1, 2, 3, 4, 5].map((n) => {
                               const filled = !draft.noShow && n <= draft.stars;
                               return (
@@ -1035,7 +1070,11 @@ export default function GameLobbyScreen() {
                                   onPress={() => setDraft(p.user_id, { stars: n, noShow: false })}
                                   className="flex-1 items-center justify-center rounded-lg bg-white py-2"
                                 >
-                                  <Text className={`text-lg ${filled ? 'text-amber-400' : 'text-gray-300'}`}>
+                                  <Text
+                                    className={`text-lg ${
+                                      filled ? 'text-brand-500' : 'text-muted-border'
+                                    }`}
+                                  >
                                     ★
                                   </Text>
                                 </Pressable>
@@ -1046,12 +1085,12 @@ export default function GameLobbyScreen() {
                           <Pressable
                             onPress={() => setDraft(p.user_id, { noShow: !draft.noShow })}
                             className={`mt-2 items-center justify-center rounded-lg py-2 ${
-                              draft.noShow ? 'bg-red-100' : 'bg-gray-100'
+                              draft.noShow ? 'bg-danger-soft' : 'bg-muted-soft'
                             }`}
                           >
                             <Text
-                              className={`text-xs font-semibold ${
-                                draft.noShow ? 'text-red-600' : 'text-gray-600'
+                              className={`font-sans-600 text-caption ${
+                                draft.noShow ? 'text-danger-strong' : 'text-muted-ink'
                               }`}
                             >
                               {draft.noShow ? '✓ Marked no-show (tap to undo)' : 'Mark as no-show'}
@@ -1066,13 +1105,13 @@ export default function GameLobbyScreen() {
                     onPress={handleSubmitRatings}
                     disabled={submittingRatings}
                     className={`mt-3 items-center justify-center rounded-xl py-3 ${
-                      submittingRatings ? 'bg-gray-200' : 'bg-brand-500'
+                      submittingRatings ? 'bg-muted-soft' : 'bg-brand-500'
                     }`}
                   >
                     {submittingRatings ? (
-                      <ActivityIndicator color="#ffffff" />
+                      <ActivityIndicator color="#46514B" />
                     ) : (
-                      <Text className="text-sm font-semibold text-white">
+                      <Text className="font-sans-600 text-label text-white">
                         Submit ratings ({ratableTargets.length})
                       </Text>
                     )}
@@ -1085,20 +1124,20 @@ export default function GameLobbyScreen() {
 
         {/* Roster */}
         <View className="px-5 pt-5">
-          <Text className="mb-3 text-sm font-semibold text-gray-400">
+          <Text className="mb-3 font-sans-600 text-label text-brand-600">
             Participants ({participants.length})
           </Text>
 
           {participants.length === 0 ? (
-            <View className="items-center justify-center rounded-2xl border border-dashed border-gray-200 py-10">
-              <Text className="text-gray-400">No one has joined yet.</Text>
+            <View className="items-center justify-center rounded-2xl border border-dashed border-muted-border bg-white py-10">
+              <Text className="font-sans text-body text-muted">No one has joined yet.</Text>
             </View>
           ) : (
             <View className="space-y-2">
               {participants.map((participant) => (
                 <View
                   key={participant.id}
-                  className="flex-row items-center rounded-2xl border border-gray-200 p-3"
+                  className="flex-row items-center rounded-2xl border border-muted-border bg-white p-3"
                 >
                   <Avatar
                     username={participant.profiles?.username ?? null}
@@ -1106,22 +1145,29 @@ export default function GameLobbyScreen() {
                   />
                   <View className="ml-3 flex-1">
                     <View className="flex-row items-center gap-2">
-                      <Text className="text-sm font-semibold text-gray-900">
+                      <Text className="font-sans-600 text-label text-muted-ink">
                         {participant.profiles?.username ?? 'Player'}
                         {participant.user_id === user?.id ? ' (you)' : ''}
                       </Text>
                       {participant.profiles?.trust_score != null ? (
                         <View className="rounded-full bg-brand-50 px-2 py-0.5">
-                          <Text className="text-xs font-semibold text-brand-700">
+                          <Text className="font-sans-600 text-caption text-brand-700">
                             {Number(participant.profiles.trust_score).toFixed(1)}
                           </Text>
                         </View>
                       ) : null}
                     </View>
                     <View className="mt-0.5 flex-row items-center gap-2">
-                      <Text className="text-xs text-gray-500">{statusLabel(participant.status)}</Text>
-                      <Text className="text-xs text-gray-300">·</Text>
-                      <Text className="text-xs font-medium text-brand-600">
+                      <View
+                        className={`rounded-full px-2 py-0.5 ${statusChipBg(participant.status)}`}
+                      >
+                        <Text
+                          className={`font-sans-600 text-micro ${statusChipText(participant.status)}`}
+                        >
+                          {statusLabel(participant.status)}
+                        </Text>
+                      </View>
+                      <Text className="font-sans-500 text-caption text-brand-600">
                         {roleLabel(participant.role)}
                       </Text>
                     </View>
@@ -1136,12 +1182,12 @@ export default function GameLobbyScreen() {
                             key={role}
                             onPress={() => handleRoleChange(participant.id, role)}
                             className={`rounded-full px-2.5 py-1 ${
-                              selected ? 'bg-brand-500' : 'bg-gray-100'
+                              selected ? 'bg-brand-500' : 'bg-muted-soft'
                             }`}
                           >
                             <Text
-                              className={`text-xs font-semibold ${
-                                selected ? 'text-white' : 'text-gray-600'
+                              className={`font-sans-600 text-caption ${
+                                selected ? 'text-white' : 'text-muted-ink'
                               }`}
                             >
                               {roleLabel(role)}
@@ -1159,27 +1205,27 @@ export default function GameLobbyScreen() {
       </ScrollView>
 
       {/* Footer */}
-      <View className="flex-row gap-2 border-t border-gray-100 p-5">
-        <Pressable
+      <View className="flex-row gap-2 border-t border-muted-border bg-brand-50 p-5">
+        <Button
+          label="Back"
           onPress={() => router.back()}
-          className="flex-1 items-center justify-center rounded-xl border border-gray-200 py-3"
-        >
-          <Text className="text-sm font-semibold text-gray-700">Back</Text>
-        </Pressable>
+          variant="secondary"
+          className="flex-1"
+        />
         {game.status === 'live' ? (
-          <Pressable
+          <Button
+            label="Enter Live Match"
             onPress={() => router.push({ pathname: '/live-match', params: { id: game.id } })}
-            className="flex-1 items-center justify-center rounded-xl bg-brand-500 py-3"
-          >
-            <Text className="text-sm font-semibold text-white">Enter Live Match</Text>
-          </Pressable>
+            variant="primary"
+            className="flex-1"
+          />
         ) : null}
       </View>
 
       {/* Inline error banner */}
       {inlineError ? (
-        <View className="absolute bottom-24 left-5 right-5 rounded-xl bg-red-50 px-4 py-3">
-          <Text className="text-sm text-red-600">{inlineError}</Text>
+        <View className="absolute bottom-24 left-5 right-5 rounded-xl bg-danger-soft px-4 py-3">
+          <Text className="font-sans-500 text-label text-danger-strong">{inlineError}</Text>
         </View>
       ) : null}
 
@@ -1187,10 +1233,14 @@ export default function GameLobbyScreen() {
       {toast ? (
         <View
           className={`absolute left-5 right-5 top-16 rounded-xl px-4 py-3 shadow-sm ${
-            toast.tone === 'success' ? 'bg-emerald-50' : 'bg-red-50'
+            toast.tone === 'success' ? 'bg-success-soft' : 'bg-danger-soft'
           }`}
         >
-          <Text className={`text-sm font-medium ${toast.tone === 'success' ? 'text-emerald-700' : 'text-red-600'}`}>
+          <Text
+            className={`font-sans-500 text-label ${
+              toast.tone === 'success' ? 'text-success-strong' : 'text-danger-strong'
+            }`}
+          >
             {toast.message}
           </Text>
         </View>

@@ -69,27 +69,27 @@ function project(coord: Coordinate): { x: number; y: number } {
  */
 export default function GameMapPicker({ selected, onSelect }: GameMapPickerProps) {
   return (
-    <View className="overflow-hidden rounded-2xl border border-indigo-100 bg-indigo-50">
+    <View className="overflow-hidden rounded-2xl border border-muted-border bg-brand-50">
       <View className="flex-row items-center justify-between px-4 py-3">
-        <Text className="text-xs font-semibold uppercase tracking-wide text-indigo-400">
+        <Text className="font-sans-600 text-caption uppercase tracking-wide text-brand-600">
           Choose a court
         </Text>
-        <Text className="text-[10px] text-indigo-300">mock — tap a marker</Text>
+        <Text className="font-sans-500 text-caption text-muted">mock — tap a marker</Text>
       </View>
 
-      <View className="relative mx-3 mb-3 h-48 overflow-hidden rounded-xl bg-indigo-100">
+      <View className="relative mx-3 mb-3 h-48 overflow-hidden rounded-xl bg-muted-soft">
         {/* Grid lines */}
         {[25, 50, 75].map((pct) => (
           <View
             key={`v${pct}`}
-            className="absolute bottom-0 top-0 w-px bg-indigo-200"
+            className="absolute bottom-0 top-0 w-px bg-muted-border"
             style={{ left: `${pct}%` }}
           />
         ))}
         {[33, 66].map((pct) => (
           <View
             key={`h${pct}`}
-            className="absolute left-0 right-0 h-px bg-indigo-200"
+            className="absolute left-0 right-0 h-px bg-muted-border"
             style={{ top: `${pct}%` }}
           />
         ))}
@@ -112,12 +112,12 @@ export default function GameMapPicker({ selected, onSelect }: GameMapPickerProps
             >
               <View
                 className={`h-4 w-4 rounded-full border-2 border-white ${
-                  isSelected ? 'bg-brand-500' : 'bg-gray-900'
+                  isSelected ? 'bg-brand-500' : 'bg-brand-600'
                 }`}
               />
               <Text
-                className={`mt-0.5 text-[9px] font-semibold ${
-                  isSelected ? 'text-brand-700' : 'text-gray-600'
+                className={`mt-0.5 font-sans-600 text-micro ${
+                  isSelected ? 'text-brand-700' : 'text-muted'
                 }`}
               >
                 {court.name}
@@ -129,11 +129,13 @@ export default function GameMapPicker({ selected, onSelect }: GameMapPickerProps
 
       <View className="px-4 pb-3">
         {selected ? (
-          <Text className="text-xs text-indigo-600">
+          <Text className="font-sans-500 text-caption text-brand-600">
             Selected: {selected.latitude.toFixed(4)}, {selected.longitude.toFixed(4)}
           </Text>
         ) : (
-          <Text className="text-xs text-indigo-400">Tap a court to set the location.</Text>
+          <Text className="font-sans-500 text-caption text-muted">
+            Tap a court to set the location.
+          </Text>
         )}
       </View>
     </View>

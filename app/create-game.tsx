@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 
+import Button from '@/components/Button';
 import GameMapPicker, { type MockCourt } from '@/components/GameMapPicker';
 import { withErrorNotification } from '@/lib/async-mutation';
 import { useAuth } from '@/lib/auth-context';
@@ -75,10 +76,10 @@ function RoundButton({
     <Pressable
       onPress={onPress}
       className={`h-8 w-8 items-center justify-center rounded-full ${
-        primary ? 'bg-brand-500' : 'bg-gray-100'
+        primary ? 'bg-brand-500' : 'bg-muted-soft'
       }`}
     >
-      <Text className={`text-base font-bold ${primary ? 'text-white' : 'text-gray-700'}`}>
+      <Text className={`font-sans-600 text-body ${primary ? 'text-white' : 'text-muted-ink'}`}>
         {label}
       </Text>
     </Pressable>
@@ -101,20 +102,26 @@ function Stepper({
   canIncrement: boolean;
 }) {
   return (
-    <View className="flex-row items-center justify-between rounded-xl border border-gray-200 bg-white px-4 py-3">
+    <View className="flex-row items-center justify-between rounded-xl border border-muted-border bg-white px-4 py-3">
       <View className="flex-1 pr-3">
-        <Text className="text-sm font-medium text-gray-700">{label}</Text>
-        <Text className="mt-0.5 text-xs text-gray-400">{hint}</Text>
+        <Text className="font-sans-500 text-label text-brand-700">{label}</Text>
+        <Text className="mt-0.5 font-sans text-caption text-muted">{hint}</Text>
       </View>
       <View className="flex-row items-center gap-3">
         <Pressable
           onPress={onDecrement}
           disabled={!canDecrement}
           className={`h-9 w-9 items-center justify-center rounded-full ${
-            canDecrement ? 'bg-gray-100' : 'bg-gray-50'
+            canDecrement ? 'bg-muted-soft' : 'bg-muted-soft'
           }`}
         >
-          <Text className={`text-lg font-bold ${canDecrement ? 'text-gray-700' : 'text-gray-300'}`}>−</Text>
+          <Text
+            className={`font-sans-700 text-heading ${
+              canDecrement ? 'text-muted-ink' : 'text-brand-300'
+            }`}
+          >
+            −
+          </Text>
         </Pressable>
         <Pressable
           onPress={onIncrement}
@@ -123,7 +130,13 @@ function Stepper({
             canIncrement ? 'bg-brand-500' : 'bg-brand-100'
           }`}
         >
-          <Text className={`text-lg font-bold ${canIncrement ? 'text-white' : 'text-brand-300'}`}>+</Text>
+          <Text
+            className={`font-sans-700 text-heading ${
+              canIncrement ? 'text-white' : 'text-brand-300'
+            }`}
+          >
+            +
+          </Text>
         </Pressable>
       </View>
     </View>
@@ -142,15 +155,15 @@ function ToggleRow({
   onValueChange: (value: boolean) => void;
 }) {
   return (
-    <View className="flex-row items-center justify-between rounded-xl border border-gray-200 bg-white px-4 py-3">
+    <View className="flex-row items-center justify-between rounded-xl border border-muted-border bg-white px-4 py-3">
       <View className="flex-1 pr-3">
-        <Text className="text-sm font-medium text-gray-700">{label}</Text>
-        <Text className="mt-0.5 text-xs text-gray-400">{hint}</Text>
+        <Text className="font-sans-500 text-label text-brand-700">{label}</Text>
+        <Text className="mt-0.5 font-sans text-caption text-muted">{hint}</Text>
       </View>
       <Switch
         value={value}
         onValueChange={onValueChange}
-        trackColor={{ true: '#6366f1', false: '#d1d5db' }}
+        trackColor={{ true: '#46514B', false: '#E5E7EB' }}
         thumbColor="#ffffff"
       />
     </View>
@@ -401,22 +414,26 @@ export default function CreateGameScreen() {
 
   if (loading) {
     return (
-      <View className="flex-1 items-center justify-center bg-white">
-        <ActivityIndicator size="large" color="#4f46e5" />
+      <View className="flex-1 items-center justify-center bg-brand-50">
+        <ActivityIndicator size="large" color="#46514B" />
       </View>
     );
   }
 
   if (!configured) {
     return (
-      <View className="flex-1 items-center justify-center bg-white px-8">
-        <Text className="text-center text-lg font-bold text-gray-900">PickUp isn&apos;t set up yet</Text>
-        <Text className="mt-3 text-center leading-6 text-gray-500">{SUPABASE_CONFIG_ERROR}</Text>
+      <View className="flex-1 items-center justify-center bg-brand-50 px-8">
+        <Text className="text-center font-display-700 text-heading text-brand-900">
+          PickUp isn&apos;t set up yet
+        </Text>
+        <Text className="mt-3 text-center font-sans text-body text-muted">
+          {SUPABASE_CONFIG_ERROR}
+        </Text>
         <Pressable
           onPress={() => router.back()}
-          className="mt-6 items-center justify-center rounded-xl border border-gray-200 px-6 py-3"
+          className="mt-6 items-center justify-center rounded-xl border border-muted-border px-6 py-3"
         >
-          <Text className="text-sm font-semibold text-gray-700">Go back</Text>
+          <Text className="font-sans-600 text-label text-muted-ink">Go back</Text>
         </Pressable>
       </View>
     );
@@ -424,16 +441,18 @@ export default function CreateGameScreen() {
 
   if (!user) {
     return (
-      <View className="flex-1 items-center justify-center bg-white px-8">
-        <Text className="text-center text-lg font-bold text-gray-900">Sign in required</Text>
-        <Text className="mt-3 text-center leading-6 text-gray-500">
+      <View className="flex-1 items-center justify-center bg-brand-50 px-8">
+        <Text className="text-center font-display-700 text-heading text-brand-900">
+          Sign in required
+        </Text>
+        <Text className="mt-3 text-center font-sans text-body text-muted">
           Sign in to create a pickup game.
         </Text>
         <Pressable
           onPress={() => router.back()}
-          className="mt-6 items-center justify-center rounded-xl border border-gray-200 px-6 py-3"
+          className="mt-6 items-center justify-center rounded-xl border border-muted-border px-6 py-3"
         >
-          <Text className="text-sm font-semibold text-gray-700">Go back</Text>
+          <Text className="font-sans-600 text-label text-muted-ink">Go back</Text>
         </Pressable>
       </View>
     );
@@ -446,7 +465,7 @@ export default function CreateGameScreen() {
 
   return (
     <KeyboardAvoidingView
-      className="flex-1 bg-white"
+      className="flex-1 bg-brand-50"
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       {/* Toast overlay */}
@@ -454,26 +473,36 @@ export default function CreateGameScreen() {
         <View className="absolute left-5 right-5 top-16 z-50 items-center">
           <View
             className={`rounded-xl px-4 py-3 ${
-              toast.tone === 'error' ? 'bg-red-600' : 'bg-emerald-600'
+              toast.tone === 'error' ? 'bg-danger-soft' : 'bg-success-soft'
             }`}
           >
-            <Text className="text-sm font-semibold text-white">{toast.message}</Text>
+            <Text
+              className={`font-sans-600 text-label ${
+                toast.tone === 'error' ? 'text-danger-strong' : 'text-success-strong'
+              }`}
+            >
+              {toast.message}
+            </Text>
           </View>
         </View>
       ) : null}
 
-      <View className="border-b border-gray-100 px-5 pb-4 pt-16">
-        <Text className="text-2xl font-bold text-gray-900">Create a Game</Text>
-        <Text className="mt-1 text-sm text-gray-500">Step {step + 1} of {TOTAL_STEPS}.</Text>
+      <View className="border-b border-muted-border bg-brand-50 px-5 pb-4 pt-16">
+        <Text className="font-display-700 text-title text-brand-900">Create a Game</Text>
+        <Text className="mt-1 font-sans text-body text-muted">
+          Step {step + 1} of {TOTAL_STEPS}.
+        </Text>
 
         {/* Progress indicator */}
         <View className="mt-4 flex-row items-start gap-1">
           {STEP_LABELS.map((label, i) => (
             <View key={label} className="flex-1">
-              <View className={`h-1.5 rounded-full ${i <= step ? 'bg-brand-500' : 'bg-gray-200'}`} />
+              <View
+                className={`h-1.5 rounded-full ${i <= step ? 'bg-brand-500' : 'bg-muted-border'}`}
+              />
               <Text
-                className={`mt-1 text-[10px] font-semibold ${
-                  i <= step ? 'text-brand-600' : 'text-gray-400'
+                className={`mt-1 font-sans-600 text-micro ${
+                  i <= step ? 'text-brand-600' : 'text-muted'
                 }`}
               >
                 {label}
@@ -489,7 +518,7 @@ export default function CreateGameScreen() {
         keyboardShouldPersistTaps="handled"
       >
         <View className="px-5 pt-5">
-          <Text className="text-xs font-semibold uppercase tracking-wide text-gray-400">
+          <Text className="font-sans-600 text-caption uppercase tracking-wide text-brand-600">
             {STEP_TITLES[step]}
           </Text>
 
@@ -506,13 +535,13 @@ export default function CreateGameScreen() {
                       setInlineError(null);
                     }}
                     className={`mb-3 w-[48%] items-center rounded-2xl border py-5 ${
-                      active ? 'border-brand-500 bg-brand-50' : 'border-gray-200 bg-white'
+                      active ? 'border-brand-500 bg-brand-50' : 'border-muted-border bg-white'
                     }`}
                   >
                     <Text className="text-4xl">{s.emoji}</Text>
                     <Text
-                      className={`mt-2 text-sm font-semibold ${
-                        active ? 'text-brand-700' : 'text-gray-700'
+                      className={`mt-2 font-sans-600 text-label ${
+                        active ? 'text-brand-700' : 'text-muted-ink'
                       }`}
                     >
                       {s.label}
@@ -544,14 +573,14 @@ export default function CreateGameScreen() {
                 canIncrement={halfDurationMins < 90}
               />
 
-              <View className="rounded-xl border border-gray-200 bg-white px-4 py-3">
-                <Text className="text-sm font-medium text-gray-700">Penalty type</Text>
+              <View className="rounded-xl border border-muted-border bg-white px-4 py-3">
+                <Text className="font-sans-500 text-label text-brand-700">Penalty type</Text>
                 <TextInput
                   value={penaltyType}
                   onChangeText={setPenaltyType}
                   placeholder="e.g. Personal foul"
-                  className="mt-2 rounded-lg border border-gray-300 bg-white px-3 py-2 text-base text-gray-900"
-                  placeholderTextColor="#9ca3af"
+                  className="mt-2 rounded-lg border border-muted-border bg-white px-3 py-2 font-sans text-body text-muted-ink"
+                  placeholderTextColor="#6B7280"
                 />
                 <View className="mt-2 flex-row flex-wrap gap-2">
                   {PENALTY_PRESETS.map((preset) => (
@@ -559,12 +588,12 @@ export default function CreateGameScreen() {
                       key={preset}
                       onPress={() => setPenaltyType(preset)}
                       className={`rounded-full px-3 py-1 ${
-                        penaltyType === preset ? 'bg-brand-500' : 'bg-gray-100'
+                        penaltyType === preset ? 'bg-brand-500' : 'bg-muted-soft'
                       }`}
                     >
                       <Text
-                        className={`text-xs font-medium ${
-                          penaltyType === preset ? 'text-white' : 'text-gray-700'
+                        className={`font-sans-500 text-caption ${
+                          penaltyType === preset ? 'text-white' : 'text-muted-ink'
                         }`}
                       >
                         {preset}
@@ -574,8 +603,8 @@ export default function CreateGameScreen() {
                 </View>
               </View>
 
-              <View className="rounded-xl border border-gray-200 bg-white px-4 py-3">
-                <Text className="text-sm font-medium text-gray-700">Custom rules</Text>
+              <View className="rounded-xl border border-muted-border bg-white px-4 py-3">
+                <Text className="font-sans-500 text-label text-brand-700">Custom rules</Text>
                 <TextInput
                   value={rulesText}
                   onChangeText={setRulesText}
@@ -583,8 +612,8 @@ export default function CreateGameScreen() {
                   multiline
                   numberOfLines={3}
                   textAlignVertical="top"
-                  className="mt-2 h-20 rounded-lg border border-gray-300 bg-white px-3 py-2 text-base text-gray-900"
-                  placeholderTextColor="#9ca3af"
+                  className="mt-2 h-20 rounded-lg border border-muted-border bg-white px-3 py-2 font-sans text-body text-muted-ink"
+                  placeholderTextColor="#6B7280"
                 />
               </View>
             </View>
@@ -634,19 +663,21 @@ export default function CreateGameScreen() {
                 onSelect={handleSelectCourt}
               />
 
-              <View className="rounded-xl border border-gray-200 bg-white px-4 py-3">
-                <Text className="text-sm font-medium text-gray-700">Court name</Text>
+              <View className="rounded-xl border border-muted-border bg-white px-4 py-3">
+                <Text className="font-sans-500 text-label text-brand-700">Court name</Text>
                 <TextInput
                   value={courtName}
                   onChangeText={setCourtName}
                   placeholder="e.g. Riverside Courts"
-                  className="mt-2 rounded-lg border border-gray-300 bg-white px-3 py-2 text-base text-gray-900"
-                  placeholderTextColor="#9ca3af"
+                  className="mt-2 rounded-lg border border-muted-border bg-white px-3 py-2 font-sans text-body text-muted-ink"
+                  placeholderTextColor="#6B7280"
                 />
               </View>
 
-              <View className="rounded-xl border border-gray-200 bg-white p-4">
-                <Text className="text-xs font-semibold uppercase tracking-wide text-gray-400">Date</Text>
+              <View className="rounded-xl border border-muted-border bg-white p-4">
+                <Text className="font-sans-600 text-caption uppercase tracking-wide text-brand-600">
+                  Date
+                </Text>
                 <ScrollView
                   horizontal
                   showsHorizontalScrollIndicator={false}
@@ -659,12 +690,12 @@ export default function CreateGameScreen() {
                         key={option.key}
                         onPress={() => applyDate(option.date)}
                         className={`rounded-full px-4 py-2 ${
-                          active ? 'bg-brand-500' : 'bg-gray-100'
+                          active ? 'bg-brand-500' : 'bg-muted-soft'
                         }`}
                       >
                         <Text
-                          className={`text-sm font-medium ${
-                            active ? 'text-white' : 'text-gray-700'
+                          className={`font-sans-500 text-label ${
+                            active ? 'text-white' : 'text-muted-ink'
                           }`}
                         >
                           {option.label}
@@ -674,37 +705,36 @@ export default function CreateGameScreen() {
                   })}
                 </ScrollView>
 
-                <Text className="mt-4 text-xs font-semibold uppercase tracking-wide text-gray-400">Time</Text>
-                <View className="mt-2 flex-row items-center justify-between rounded-lg bg-gray-50 px-4 py-3">
+                <Text className="mt-4 font-sans-600 text-caption uppercase tracking-wide text-brand-600">
+                  Time
+                </Text>
+                <View className="mt-2 flex-row items-center justify-between rounded-lg bg-muted-soft px-4 py-3">
                   <View className="items-center">
-                    <Text className="text-[10px] font-medium uppercase text-gray-400">Hour</Text>
+                    <Text className="font-sans-500 text-micro uppercase text-muted">Hour</Text>
                     <View className="mt-1 flex-row items-center gap-2">
                       <RoundButton label="−" onPress={() => bumpHour(-1)} />
-                      <Text className="w-8 text-center text-xl font-bold tabular-nums text-gray-900">
+                      <Text className="w-8 text-center font-display-700 text-heading tabular-nums text-muted-ink">
                         {hour12}
                       </Text>
                       <RoundButton label="+" onPress={() => bumpHour(1)} primary />
                     </View>
                   </View>
 
-                  <Text className="text-xl font-bold text-gray-300">:</Text>
+                  <Text className="font-display-700 text-heading text-muted">:</Text>
 
                   <View className="items-center">
-                    <Text className="text-[10px] font-medium uppercase text-gray-400">Minute</Text>
+                    <Text className="font-sans-500 text-micro uppercase text-muted">Minute</Text>
                     <View className="mt-1 flex-row items-center gap-2">
                       <RoundButton label="−" onPress={() => bumpMinute(-1)} />
-                      <Text className="w-8 text-center text-xl font-bold tabular-nums text-gray-900">
+                      <Text className="w-8 text-center font-display-700 text-heading tabular-nums text-muted-ink">
                         {minuteLabel}
                       </Text>
                       <RoundButton label="+" onPress={() => bumpMinute(1)} primary />
                     </View>
                   </View>
 
-                  <Pressable
-                    onPress={toggleAmPm}
-                    className="rounded-xl bg-brand-50 px-3 py-2"
-                  >
-                    <Text className="text-sm font-bold text-brand-600">{ampm}</Text>
+                  <Pressable onPress={toggleAmPm} className="rounded-xl bg-brand-100 px-3 py-2">
+                    <Text className="font-sans-700 text-label text-brand-700">{ampm}</Text>
                   </Pressable>
                 </View>
               </View>
@@ -714,33 +744,20 @@ export default function CreateGameScreen() {
       </ScrollView>
 
       {inlineError ? (
-        <View className="mx-5 mb-2 rounded-lg bg-red-50 px-4 py-2">
-          <Text className="text-sm text-red-600">{inlineError}</Text>
+        <View className="mx-5 mb-2 rounded-lg bg-danger-soft px-4 py-2">
+          <Text className="font-sans-500 text-label text-danger-strong">{inlineError}</Text>
         </View>
       ) : null}
 
-      <View className="flex-row gap-3 border-t border-gray-100 p-5">
-        <Pressable
-          onPress={handleBack}
-          className="flex-1 items-center justify-center rounded-xl border border-gray-200 py-3"
-        >
-          <Text className="text-sm font-semibold text-gray-700">Back</Text>
-        </Pressable>
-        <Pressable
+      <View className="flex-row gap-3 border-t border-muted-border bg-brand-50 p-5">
+        <Button label="Back" onPress={handleBack} variant="secondary" className="flex-1" />
+        <Button
+          label={isLastStep ? 'Create game' : 'Next'}
           onPress={isLastStep ? handleSubmit : handleNext}
-          disabled={submitting}
-          className={`flex-1 items-center justify-center rounded-xl py-3 ${
-            isLastStep ? 'bg-brand-500' : 'bg-brand-500'
-          } ${submitting ? 'opacity-60' : ''}`}
-        >
-          {submitting ? (
-            <ActivityIndicator color="#ffffff" />
-          ) : (
-            <Text className="text-sm font-semibold text-white">
-              {isLastStep ? 'Create game' : 'Next'}
-            </Text>
-          )}
-        </Pressable>
+          loading={submitting}
+          variant="primary"
+          className="flex-1"
+        />
       </View>
     </KeyboardAvoidingView>
   );

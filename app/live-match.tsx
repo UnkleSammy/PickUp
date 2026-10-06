@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 
+import Button from '@/components/Button';
 import { withErrorNotification } from '@/lib/async-mutation';
 import { useAuth } from '@/lib/auth-context';
 import { toErrorMessage } from '@/lib/errors';
@@ -61,7 +62,13 @@ function formatClockTime(iso: string): string {
   return `${hour12}:${minutes} ${ampm}`;
 }
 
-/** One of the timekeeper's big buttons (Start / Pause / Reset / Period End). */
+/**
+ * One of the timekeeper's big buttons (Start / Pause / Reset / Period End).
+ *
+ * Tones (design/IDENTITY.md §5): Start is the single volt "go live" energy
+ * moment (ink text on volt); Pause/Reset are neutral credible actions
+ * (brand-500 / muted); Period End is destructive (danger).
+ */
 function TimeButton({
   label,
   onPress,
@@ -73,21 +80,24 @@ function TimeButton({
   disabled: boolean;
   tone: 'start' | 'pause' | 'reset' | 'period';
 }) {
-  const activeColor: Record<typeof tone, string> = {
-    start: 'bg-emerald-500',
-    pause: 'bg-amber-500',
-    reset: 'bg-gray-500',
-    period: 'bg-red-500',
+  const activeBg: Record<typeof tone, string> = {
+    start: 'bg-accent',
+    pause: 'bg-brand-500',
+    reset: 'bg-muted',
+    period: 'bg-danger',
   };
+  const activeText = tone === 'start' ? 'text-brand-900' : 'text-white';
   return (
     <Pressable
       onPress={onPress}
       disabled={disabled}
       className={`flex-1 items-center justify-center rounded-xl py-4 ${
-        disabled ? 'bg-gray-200' : activeColor[tone]
+        disabled ? 'bg-muted-soft' : activeBg[tone]
       }`}
     >
-      <Text className={`text-base font-semibold ${disabled ? 'text-gray-400' : 'text-white'}`}>
+      <Text
+        className={`font-sans-600 text-body ${disabled ? 'text-muted' : activeText}`}
+      >
         {label}
       </Text>
     </Pressable>
@@ -440,26 +450,30 @@ export default function LiveMatchScreen() {
   // --- Render guards ----------------------------------------------------------------
   if (authLoading || (loading && isSupabaseConfigured)) {
     return (
-      <View className="flex-1 items-center justify-center bg-white">
-        <ActivityIndicator size="large" color="#4f46e5" />
+      <View className="flex-1 items-center justify-center bg-brand-50">
+        <ActivityIndicator size="large" color="#46514B" />
       </View>
     );
   }
 
   if (!configured) {
     return (
-      <View className="flex-1 items-center justify-center bg-white px-8">
-        <Text className="text-lg font-bold text-gray-900">PickUp isn&apos;t set up yet</Text>
-        <Text className="mt-3 text-center leading-6 text-gray-500">{SUPABASE_CONFIG_ERROR}</Text>
+      <View className="flex-1 items-center justify-center bg-brand-50 px-8">
+        <Text className="font-display-700 text-heading text-brand-900">
+          PickUp isn&apos;t set up yet
+        </Text>
+        <Text className="mt-3 text-center font-sans text-body text-muted">
+          {SUPABASE_CONFIG_ERROR}
+        </Text>
       </View>
     );
   }
 
   if (!id) {
     return (
-      <View className="flex-1 items-center justify-center bg-white px-8">
-        <Text className="text-lg font-bold text-gray-900">Missing game</Text>
-        <Text className="mt-3 text-center text-gray-500">
+      <View className="flex-1 items-center justify-center bg-brand-50 px-8">
+        <Text className="font-display-700 text-heading text-brand-900">Missing game</Text>
+        <Text className="mt-3 text-center font-sans text-body text-muted">
           No game id was provided. Go back to the lobby and open the live hub from there.
         </Text>
       </View>
@@ -468,14 +482,16 @@ export default function LiveMatchScreen() {
 
   if (error) {
     return (
-      <View className="flex-1 items-center justify-center bg-white px-8">
-        <Text className="text-lg font-bold text-gray-900">Couldn&apos;t load the game</Text>
-        <Text className="mt-3 text-center leading-6 text-gray-500">{error}</Text>
+      <View className="flex-1 items-center justify-center bg-brand-50 px-8">
+        <Text className="font-display-700 text-heading text-brand-900">
+          Couldn&apos;t load the game
+        </Text>
+        <Text className="mt-3 text-center font-sans text-body text-muted">{error}</Text>
         <Pressable
           onPress={() => router.back()}
-          className="mt-6 items-center justify-center rounded-xl border border-gray-200 px-6 py-3"
+          className="mt-6 items-center justify-center rounded-xl border border-muted-border px-6 py-3"
         >
-          <Text className="text-sm font-semibold text-gray-700">Back</Text>
+          <Text className="font-sans-600 text-label text-muted-ink">Back</Text>
         </Pressable>
       </View>
     );
@@ -486,18 +502,18 @@ export default function LiveMatchScreen() {
   }
 
   return (
-    <View className="flex-1 bg-white">
-      <View className="border-b border-gray-100 px-5 pb-4 pt-16">
-        <Text className="text-2xl font-bold text-gray-900">Live Match Hub</Text>
-        <Text className="mt-1 text-sm text-gray-500">
+    <View className="flex-1 bg-brand-50">
+      <View className="border-b border-muted-border bg-brand-50 px-5 pb-4 pt-16">
+        <Text className="font-display-700 text-title text-brand-900">Live Match Hub</Text>
+        <Text className="mt-1 font-sans text-body text-muted">
           {game.sport} · {game.court_name}
         </Text>
         <View className="mt-2 flex-row items-center gap-2">
           <View className="rounded-full bg-brand-100 px-3 py-1">
-            <Text className="text-xs font-semibold text-brand-700">{viewLabel}</Text>
+            <Text className="font-sans-600 text-caption text-brand-700">{viewLabel}</Text>
           </View>
-          <View className="rounded-full bg-gray-100 px-3 py-1">
-            <Text className="text-xs font-semibold uppercase tracking-wide text-gray-600">
+          <View className="rounded-full bg-brand-100 px-3 py-1">
+            <Text className="font-sans-600 text-caption uppercase tracking-wide text-brand-700">
               {game.status}
             </Text>
           </View>
@@ -505,26 +521,30 @@ export default function LiveMatchScreen() {
       </View>
 
       <ScrollView className="flex-1" contentContainerStyle={{ paddingBottom: 24 }}>
-        {/* Timer */}
+        {/* Timer — dark "night court" hero */}
         <View className="px-5 pt-5">
-          <View className="rounded-2xl bg-gray-900 px-6 py-6">
+          <View className="rounded-2xl bg-brand-900 px-6 py-6">
             <View className="flex-row items-center justify-between">
-              <Text className="text-xs font-semibold uppercase tracking-wide text-gray-400">
+              <Text className="font-sans-600 text-caption uppercase tracking-wide text-brand-300">
                 Game clock
               </Text>
               <View
-                className={`rounded-full px-3 py-1 ${running ? 'bg-emerald-500' : 'bg-gray-700'}`}
+                className={`rounded-full px-3 py-1 ${running ? 'bg-accent' : 'bg-brand-700'}`}
               >
-                <Text className="text-xs font-semibold text-white">
+                <Text
+                  className={`font-sans-600 text-caption ${
+                    running ? 'text-brand-900' : 'text-brand-300'
+                  }`}
+                >
                   {running ? 'Running' : 'Paused'}
                 </Text>
               </View>
             </View>
-            <Text className="mt-3 text-center text-6xl font-bold tabular-nums text-white">
+            <Text className="mt-3 text-center font-display text-6xl tabular-nums text-brand-50">
               {formatClock(elapsedMs)}
             </Text>
             {periodMs > 0 ? (
-              <Text className="mt-2 text-center text-sm text-gray-400">
+              <Text className="mt-2 text-center font-sans text-body text-brand-300">
                 Period {game.rules_penalties.half_duration_mins} min · Remaining{' '}
                 {formatClock(remainingMs)}
               </Text>
@@ -532,15 +552,15 @@ export default function LiveMatchScreen() {
           </View>
         </View>
 
-        {/* Scoreboard */}
+        {/* Scoreboard — dark, paired with the timer */}
         <View className="px-5 pt-4">
-          <View className="rounded-2xl border border-gray-200 p-4">
-            <Text className="text-xs font-semibold uppercase tracking-wide text-gray-400">
+          <View className="rounded-2xl bg-brand-800 p-4">
+            <Text className="font-sans-600 text-caption uppercase tracking-wide text-brand-300">
               Scoreboard
             </Text>
             <View className="mt-3 flex-row items-end justify-between">
-              <Text className="text-4xl font-bold text-gray-900">{totalScore}</Text>
-              <Text className="text-sm text-gray-400">total points</Text>
+              <Text className="font-display text-5xl tabular-nums text-brand-50">{totalScore}</Text>
+              <Text className="font-sans text-body text-brand-300">total points</Text>
             </View>
 
             {checkedIn.length > 0 ? (
@@ -552,13 +572,13 @@ export default function LiveMatchScreen() {
                   return (
                     <View
                       key={p.id}
-                      className="flex-row items-center justify-between rounded-xl bg-gray-50 px-3 py-2"
+                      className="flex-row items-center justify-between rounded-xl bg-brand-700 px-3 py-2"
                     >
-                      <Text className="flex-1 text-sm font-semibold text-gray-800">
+                      <Text className="flex-1 font-sans-600 text-label text-brand-50">
                         {p.profiles?.username ?? 'Player'}
                       </Text>
-                      <Text className="text-sm font-semibold text-brand-600">{pts} pts</Text>
-                      <Text className="ml-3 text-sm text-gray-500">
+                      <Text className="font-sans-600 text-label text-brand-300">{pts} pts</Text>
+                      <Text className="ml-3 font-sans text-caption text-brand-300">
                         {fouls}/{limit > 0 ? limit : '—'} fouls
                       </Text>
                     </View>
@@ -566,7 +586,9 @@ export default function LiveMatchScreen() {
                 })}
               </View>
             ) : (
-              <Text className="mt-3 text-sm text-gray-400">No checked-in players yet.</Text>
+              <Text className="mt-3 font-sans text-body text-brand-300">
+                No checked-in players yet.
+              </Text>
             )}
           </View>
         </View>
@@ -574,7 +596,7 @@ export default function LiveMatchScreen() {
         {/* Timekeeper controls */}
         {canTimekeep ? (
           <View className="px-5 pt-4">
-            <Text className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-400">
+            <Text className="mb-2 font-sans-600 text-caption uppercase tracking-wide text-brand-600">
               Timekeeper controls
             </Text>
             <View className="space-y-2">
@@ -613,22 +635,24 @@ export default function LiveMatchScreen() {
         {/* Referee controls */}
         {canReferee ? (
           <View className="px-5 pt-4">
-            <Text className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-400">
+            <Text className="mb-2 font-sans-600 text-caption uppercase tracking-wide text-brand-600">
               Referee controls
             </Text>
             {checkedIn.length === 0 ? (
-              <View className="rounded-2xl border border-dashed border-gray-200 py-6">
-                <Text className="text-center text-gray-400">No checked-in players to officiate.</Text>
+              <View className="rounded-2xl border border-dashed border-muted-border bg-white py-6">
+                <Text className="text-center font-sans text-body text-muted">
+                  No checked-in players to officiate.
+                </Text>
               </View>
             ) : (
               <View className="space-y-3">
                 {checkedIn.map((p) => (
-                  <View key={p.id} className="rounded-2xl border border-gray-200 p-3">
+                  <View key={p.id} className="rounded-2xl border border-muted-border bg-white p-3">
                     <View className="flex-row items-center justify-between">
-                      <Text className="text-sm font-semibold text-gray-900">
+                      <Text className="font-sans-600 text-label text-muted-ink">
                         {p.profiles?.username ?? 'Player'}
                       </Text>
-                      <Text className="text-xs text-gray-400">
+                      <Text className="font-sans text-caption text-muted">
                         {pointsByPlayer.get(p.user_id) ?? 0} pts
                       </Text>
                     </View>
@@ -639,12 +663,12 @@ export default function LiveMatchScreen() {
                           onPress={() => handleScore(p.user_id, n)}
                           disabled={mutating}
                           className={`flex-1 items-center justify-center rounded-lg py-2 ${
-                            mutating ? 'bg-gray-200' : 'bg-brand-500'
+                            mutating ? 'bg-muted-soft' : 'bg-accent'
                           }`}
                         >
                           <Text
-                            className={`text-sm font-semibold ${
-                              mutating ? 'text-gray-400' : 'text-white'
+                            className={`font-sans-600 text-label ${
+                              mutating ? 'text-muted' : 'text-brand-900'
                             }`}
                           >
                             +{n}
@@ -655,12 +679,12 @@ export default function LiveMatchScreen() {
                         onPress={() => setFoulDraft({ playerId: p.user_id, penaltyName: '' })}
                         disabled={mutating}
                         className={`flex-1 items-center justify-center rounded-lg py-2 ${
-                          mutating ? 'bg-gray-200' : 'bg-red-500'
+                          mutating ? 'bg-muted-soft' : 'bg-danger'
                         }`}
                       >
                         <Text
-                          className={`text-sm font-semibold ${
-                            mutating ? 'text-gray-400' : 'text-white'
+                          className={`font-sans-600 text-label ${
+                            mutating ? 'text-muted' : 'text-white'
                           }`}
                         >
                           Foul
@@ -674,8 +698,8 @@ export default function LiveMatchScreen() {
 
             {/* Inline foul picker */}
             {foulDraft ? (
-              <View className="mt-3 rounded-xl bg-red-50 p-3">
-                <Text className="text-sm font-semibold text-red-700">
+              <View className="mt-3 rounded-xl bg-danger-soft p-3">
+                <Text className="font-sans-600 text-label text-danger-strong">
                   Log foul — {nameFor(foulDraft.playerId)}
                 </Text>
                 <View className="mt-2 flex-row flex-wrap gap-1.5">
@@ -685,11 +709,13 @@ export default function LiveMatchScreen() {
                       <Pressable
                         key={preset}
                         onPress={() => setFoulDraft({ ...foulDraft, penaltyName: preset })}
-                        className={`rounded-full px-2.5 py-1 ${selected ? 'bg-red-500' : 'bg-red-100'}`}
+                        className={`rounded-full px-2.5 py-1 ${
+                          selected ? 'bg-danger' : 'bg-danger-soft'
+                        }`}
                       >
                         <Text
-                          className={`text-xs font-semibold ${
-                            selected ? 'text-white' : 'text-red-700'
+                          className={`font-sans-600 text-caption ${
+                            selected ? 'text-white' : 'text-danger-strong'
                           }`}
                         >
                           {preset}
@@ -702,8 +728,8 @@ export default function LiveMatchScreen() {
                   value={foulDraft.penaltyName}
                   onChangeText={(text) => setFoulDraft({ ...foulDraft, penaltyName: text })}
                   placeholder="Or type an infraction"
-                  placeholderTextColor="#9ca3af"
-                  className="mt-2 rounded-lg border border-red-200 bg-white px-3 py-2 text-sm text-gray-900"
+                  placeholderTextColor="#6B7280"
+                  className="mt-2 rounded-lg border border-muted-border bg-white px-3 py-2 font-sans text-body text-muted-ink"
                 />
                 <View className="mt-2 flex-row gap-2">
                   <Pressable
@@ -713,12 +739,12 @@ export default function LiveMatchScreen() {
                     }}
                     disabled={mutating}
                     className={`flex-1 items-center justify-center rounded-lg py-2 ${
-                      mutating ? 'bg-gray-200' : 'bg-red-500'
+                      mutating ? 'bg-muted-soft' : 'bg-danger'
                     }`}
                   >
                     <Text
-                      className={`text-sm font-semibold ${
-                        mutating ? 'text-gray-400' : 'text-white'
+                      className={`font-sans-600 text-label ${
+                        mutating ? 'text-muted' : 'text-white'
                       }`}
                     >
                       Record foul
@@ -726,9 +752,9 @@ export default function LiveMatchScreen() {
                   </Pressable>
                   <Pressable
                     onPress={() => setFoulDraft(null)}
-                    className="flex-1 items-center justify-center rounded-lg border border-gray-200 py-2"
+                    className="flex-1 items-center justify-center rounded-lg border border-muted-border py-2"
                   >
-                    <Text className="text-sm font-semibold text-gray-600">Cancel</Text>
+                    <Text className="font-sans-600 text-label text-muted-ink">Cancel</Text>
                   </Pressable>
                 </View>
               </View>
@@ -738,27 +764,29 @@ export default function LiveMatchScreen() {
 
         {/* Rules checklist */}
         <View className="px-5 pt-4">
-          <View className="rounded-2xl border border-gray-200 p-4">
-            <Text className="text-xs font-semibold uppercase tracking-wide text-gray-400">
+          <View className="rounded-2xl border border-muted-border bg-white p-4">
+            <Text className="font-sans-600 text-caption uppercase tracking-wide text-brand-600">
               Rules
             </Text>
-            <Text className="mt-2 text-sm leading-5 text-gray-700">{game.rules_text}</Text>
+            <Text className="mt-2 font-sans text-body leading-5 text-brand-700">
+              {game.rules_text}
+            </Text>
             <View className="mt-3 space-y-1.5">
               <View className="flex-row justify-between">
-                <Text className="text-sm text-gray-500">Fouls limit</Text>
-                <Text className="text-sm font-semibold text-gray-800">
+                <Text className="font-sans text-body text-muted">Fouls limit</Text>
+                <Text className="font-sans-600 text-label text-muted-ink">
                   {game.rules_penalties.fouls_limit}
                 </Text>
               </View>
               <View className="flex-row justify-between">
-                <Text className="text-sm text-gray-500">Penalty type</Text>
-                <Text className="text-sm font-semibold text-gray-800">
+                <Text className="font-sans text-body text-muted">Penalty type</Text>
+                <Text className="font-sans-600 text-label text-muted-ink">
                   {game.rules_penalties.penalty_type}
                 </Text>
               </View>
               <View className="flex-row justify-between">
-                <Text className="text-sm text-gray-500">Period length</Text>
-                <Text className="text-sm font-semibold text-gray-800">
+                <Text className="font-sans text-body text-muted">Period length</Text>
+                <Text className="font-sans-600 text-label text-muted-ink">
                   {game.rules_penalties.half_duration_mins} min
                 </Text>
               </View>
@@ -768,24 +796,26 @@ export default function LiveMatchScreen() {
 
         {/* Live feed */}
         <View className="px-5 pt-4">
-          <View className="rounded-2xl border border-gray-200 p-4">
-            <Text className="text-xs font-semibold uppercase tracking-wide text-gray-400">
+          <View className="rounded-2xl border border-muted-border bg-white p-4">
+            <Text className="font-sans-600 text-caption uppercase tracking-wide text-brand-600">
               Live feed
             </Text>
             {feedEvents.length === 0 ? (
-              <Text className="mt-3 text-sm text-gray-400">No scoring or foul events yet.</Text>
+              <Text className="mt-3 font-sans text-body text-muted">
+                No scoring or foul events yet.
+              </Text>
             ) : (
               <View className="mt-3 space-y-2">
                 {feedEvents.map((e) => {
                   const line = describeEvent(e);
                   return (
                     <View key={e.id} className="flex-row items-start gap-2">
-                      <Text className="text-xs tabular-nums text-gray-400">
+                      <Text className="font-sans text-caption tabular-nums text-muted">
                         {formatClockTime(e.created_at)}
                       </Text>
                       <Text
-                        className={`flex-1 text-sm ${
-                          line.tone === 'score' ? 'text-gray-800' : 'text-red-600'
+                        className={`flex-1 font-sans text-body ${
+                          line.tone === 'score' ? 'text-muted-ink' : 'text-danger-strong'
                         }`}
                       >
                         {line.text}
@@ -800,19 +830,18 @@ export default function LiveMatchScreen() {
       </ScrollView>
 
       {/* Footer */}
-      <View className="border-t border-gray-100 p-5">
-        <Pressable
+      <View className="border-t border-muted-border bg-brand-50 p-5">
+        <Button
+          label="Back to Lobby"
           onPress={() => router.back()}
-          className="items-center justify-center rounded-xl border border-gray-200 py-3"
-        >
-          <Text className="text-sm font-semibold text-gray-700">Back to Lobby</Text>
-        </Pressable>
+          variant="secondary"
+        />
       </View>
 
       {/* Inline error banner */}
       {inlineError ? (
-        <View className="absolute bottom-24 left-5 right-5 rounded-xl bg-red-50 px-4 py-3">
-          <Text className="text-sm text-red-600">{inlineError}</Text>
+        <View className="absolute bottom-24 left-5 right-5 rounded-xl bg-danger-soft px-4 py-3">
+          <Text className="font-sans-500 text-label text-danger-strong">{inlineError}</Text>
         </View>
       ) : null}
 
@@ -820,12 +849,12 @@ export default function LiveMatchScreen() {
       {toast ? (
         <View
           className={`absolute left-5 right-5 top-16 rounded-xl px-4 py-3 shadow-sm ${
-            toast.tone === 'success' ? 'bg-emerald-50' : 'bg-red-50'
+            toast.tone === 'success' ? 'bg-success-soft' : 'bg-danger-soft'
           }`}
         >
           <Text
-            className={`text-sm font-medium ${
-              toast.tone === 'success' ? 'text-emerald-700' : 'text-red-600'
+            className={`font-sans-500 text-label ${
+              toast.tone === 'success' ? 'text-success-strong' : 'text-danger-strong'
             }`}
           >
             {toast.message}
