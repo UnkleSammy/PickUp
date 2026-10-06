@@ -7,6 +7,10 @@
     "scheme": "pickup",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": false,
+    "web": {
+      "bundler": "metro",
+      "output": "single"
+    },
     "ios": {
       "supportsTablet": true
     },
