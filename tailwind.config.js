@@ -65,8 +65,7 @@ module.exports = {
       },
 
       // Type scale (see design/IDENTITY.md §Type). Named steps map to `text-<name>`.
-      // Sizes and line-heights tuned for a phone viewport; weights are applied via
-      // the existing `font-*` utilities rather than baked into the size token.
+      // Sizes and line-heights tuned for a phone viewport.
       fontSize: {
         display: ['34px', { lineHeight: '40px' }],
         title: ['28px', { lineHeight: '34px' }],
@@ -76,6 +75,25 @@ module.exports = {
         label: ['14px', { lineHeight: '20px' }],
         caption: ['12px', { lineHeight: '16px' }],
         micro: ['11px', { lineHeight: '14px' }],
+      },
+
+      // Font families (see design/IDENTITY.md §Type). Each custom font is loaded as a
+      // distinct family per weight (see app/_layout.tsx `useFonts`), because React Native
+      // does not auto-select a weight variant from a single family name — `fontWeight`
+      // alone cannot switch between individually-loaded .ttf files. The `font-display` /
+      // `font-sans` utilities therefore carry the *weight baked into the family token*,
+      // matching the type scale's weight column. `display` = Archivo (600–900), `sans` =
+      // Inter (400–700).
+      fontFamily: {
+        display: 'Archivo_800ExtraBold', // canonical display weight (800)
+        'display-600': 'Archivo_600SemiBold',
+        'display-700': 'Archivo_700Bold',
+        'display-800': 'Archivo_800ExtraBold',
+        'display-900': 'Archivo_900Black', // wordmark weight
+        sans: 'Inter_400Regular', // canonical body weight (400)
+        'sans-500': 'Inter_500Medium',
+        'sans-600': 'Inter_600SemiBold',
+        'sans-700': 'Inter_700Bold',
       },
     },
   },

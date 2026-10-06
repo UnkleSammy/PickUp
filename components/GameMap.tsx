@@ -35,7 +35,7 @@ const styles = StyleSheet.create({
     width: 26,
     height: 26,
     borderRadius: 13,
-    backgroundColor: '#4f46e5',
+    backgroundColor: '#46514B',
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 2,
@@ -50,7 +50,7 @@ const styles = StyleSheet.create({
     width: 12,
     height: 12,
     borderRadius: 6,
-    backgroundColor: '#10b981',
+    backgroundColor: '#047857',
     borderWidth: 2,
     borderColor: '#ffffff',
   },
@@ -122,15 +122,15 @@ export default function GameMap({ games, userLocation, hasRealLocation }: GameMa
 
   if (!canRenderMap) {
     return (
-      <View className="overflow-hidden rounded-2xl border border-gray-200 bg-gray-50">
+      <View className="overflow-hidden rounded-2xl border border-muted-border bg-brand-50">
         <View className="flex-row items-center justify-between px-4 py-3">
-          <Text className="text-xs font-semibold uppercase tracking-wide text-gray-400">Map</Text>
-          <Text className="text-[10px] text-gray-400">
+          <Text className="text-xs font-semibold uppercase tracking-wide text-brand-600">Map</Text>
+          <Text className="text-[10px] text-brand-600">
             {Platform.OS === 'android' ? 'Map needs Google Maps key' : 'Map available on device'}
           </Text>
         </View>
-        <View className="mx-3 mb-3 h-44 items-center justify-center rounded-xl bg-gray-100">
-          <Text className="px-4 text-center text-xs text-gray-400">
+        <View className="mx-3 mb-3 h-44 items-center justify-center rounded-xl bg-muted-soft">
+          <Text className="px-4 text-center text-xs text-brand-600">
             {games.length === 0
               ? 'No games plotted yet'
               : `${games.length} game${games.length === 1 ? '' : 's'} near you — see the list below`}
@@ -141,10 +141,10 @@ export default function GameMap({ games, userLocation, hasRealLocation }: GameMa
   }
 
   return (
-    <View className="overflow-hidden rounded-2xl border border-gray-200 bg-white">
+    <View className="overflow-hidden rounded-2xl border border-muted-border bg-white">
       <View className="flex-row items-center justify-between px-4 py-3">
-        <Text className="text-xs font-semibold uppercase tracking-wide text-gray-400">Map</Text>
-        <Text className="text-[10px] text-gray-400">
+        <Text className="text-xs font-semibold uppercase tracking-wide text-brand-600">Map</Text>
+        <Text className="text-[10px] text-brand-600">
           {games.length} game{games.length === 1 ? '' : 's'} plotted
         </Text>
       </View>

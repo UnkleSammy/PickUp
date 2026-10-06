@@ -12,6 +12,8 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 
+import Button from '@/components/Button';
+import Wordmark from '@/components/Wordmark';
 import { withErrorNotification } from '@/lib/async-mutation';
 import { useAuth } from '@/lib/auth-context';
 import { toErrorMessage } from '@/lib/errors';
@@ -103,17 +105,21 @@ export default function AuthScreen() {
 
   if (loading) {
     return (
-      <View className="flex-1 items-center justify-center bg-white">
-        <ActivityIndicator size="large" color="#4f46e5" />
+      <View className="flex-1 items-center justify-center bg-brand-900">
+        <ActivityIndicator size="large" color="#C9F24B" />
       </View>
     );
   }
 
   if (!configured) {
     return (
-      <View className="flex-1 items-center justify-center bg-white px-8">
-        <Text className="text-lg font-bold text-gray-900 text-center">PickUp isn&apos;t set up yet</Text>
-        <Text className="mt-3 text-center text-gray-500 leading-6">{SUPABASE_CONFIG_ERROR}</Text>
+      <View className="flex-1 items-center justify-center bg-brand-900 px-8">
+        <Text className="text-center font-sans-600 text-lg text-brand-50">
+          PickUp isn&apos;t set up yet
+        </Text>
+        <Text className="mt-3 text-center font-sans text-body leading-6 text-brand-200">
+          {SUPABASE_CONFIG_ERROR}
+        </Text>
       </View>
     );
   }
@@ -124,7 +130,7 @@ export default function AuthScreen() {
 
   return (
     <KeyboardAvoidingView
-      className="flex-1 bg-white"
+      className="flex-1 bg-brand-900"
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       <ScrollView
@@ -134,14 +140,14 @@ export default function AuthScreen() {
       >
         <View className="px-8 py-12">
           <View className="mb-8">
-            <Text className="text-3xl font-extrabold text-gray-900">PickUp</Text>
-            <Text className="mt-2 text-base text-gray-500">
+            <Wordmark tone="dark" className="text-display" />
+            <Text className="mt-3 font-sans text-body text-brand-200">
               Find a game. Run the game. Play.
             </Text>
           </View>
 
-          <View className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
-            <View className="mb-6 flex-row rounded-xl bg-gray-100 p-1">
+          <View className="rounded-2xl border border-brand-700 bg-brand-800 p-6">
+            <View className="mb-6 flex-row rounded-xl bg-brand-700 p-1">
               {(['sign-in', 'sign-up'] as const).map((m) => (
                 <Pressable
                   key={m}
@@ -150,11 +156,11 @@ export default function AuthScreen() {
                     setInlineError(null);
                     setInfoMessage(null);
                   }}
-                  className={`flex-1 rounded-lg py-2 ${mode === m ? 'bg-white shadow-sm' : ''}`}
+                  className={`flex-1 rounded-lg py-2 ${mode === m ? 'bg-brand-500' : ''}`}
                 >
                   <Text
-                    className={`text-center text-sm font-semibold ${
-                      mode === m ? 'text-brand-600' : 'text-gray-500'
+                    className={`text-center font-sans-600 text-label ${
+                      mode === m ? 'text-white' : 'text-brand-300'
                     }`}
                   >
                     {m === 'sign-in' ? 'Sign In' : 'Sign Up'}
@@ -165,21 +171,21 @@ export default function AuthScreen() {
 
             {mode === 'sign-up' && (
               <View className="mb-4">
-                <Text className="mb-1 text-sm font-medium text-gray-700">Username</Text>
+                <Text className="mb-1 font-sans-500 text-label text-brand-100">Username</Text>
                 <TextInput
                   value={username}
                   onChangeText={setUsername}
                   placeholder="pickup_player"
                   autoCapitalize="none"
                   autoCorrect={false}
-                  className="rounded-xl border border-gray-300 bg-white px-4 py-3 text-base text-gray-900"
-                  placeholderTextColor="#9ca3af"
+                  className="rounded-xl border border-brand-600 bg-brand-700 px-4 py-3 font-sans text-body text-white"
+                  placeholderTextColor="#AAB3AE"
                 />
               </View>
             )}
 
             <View className="mb-4">
-              <Text className="mb-1 text-sm font-medium text-gray-700">Email</Text>
+              <Text className="mb-1 font-sans-500 text-label text-brand-100">Email</Text>
               <TextInput
                 value={email}
                 onChangeText={setEmail}
@@ -189,13 +195,13 @@ export default function AuthScreen() {
                 keyboardType="email-address"
                 autoComplete="email"
                 textContentType="emailAddress"
-                className="rounded-xl border border-gray-300 bg-white px-4 py-3 text-base text-gray-900"
-                placeholderTextColor="#9ca3af"
+                className="rounded-xl border border-brand-600 bg-brand-700 px-4 py-3 font-sans text-body text-white"
+                placeholderTextColor="#AAB3AE"
               />
             </View>
 
             <View className="mb-4">
-              <Text className="mb-1 text-sm font-medium text-gray-700">Password</Text>
+              <Text className="mb-1 font-sans-500 text-label text-brand-100">Password</Text>
               <TextInput
                 value={password}
                 onChangeText={setPassword}
@@ -204,36 +210,30 @@ export default function AuthScreen() {
                 autoCapitalize="none"
                 autoComplete={isSignIn ? 'password' : 'new-password'}
                 textContentType={isSignIn ? 'password' : 'newPassword'}
-                className="rounded-xl border border-gray-300 bg-white px-4 py-3 text-base text-gray-900"
-                placeholderTextColor="#9ca3af"
+                className="rounded-xl border border-brand-600 bg-brand-700 px-4 py-3 font-sans text-body text-white"
+                placeholderTextColor="#AAB3AE"
               />
             </View>
 
             {inlineError ? (
-              <View className="mb-4 rounded-lg bg-red-50 px-4 py-3">
-                <Text className="text-sm text-red-600">{inlineError}</Text>
+              <View className="mb-4 rounded-lg bg-danger-soft px-4 py-3">
+                <Text className="font-sans-500 text-label text-danger-strong">{inlineError}</Text>
               </View>
             ) : null}
 
             {infoMessage ? (
-              <View className="mb-4 rounded-lg bg-emerald-50 px-4 py-3">
-                <Text className="text-sm text-emerald-700">{infoMessage}</Text>
+              <View className="mb-4 rounded-lg bg-success-soft px-4 py-3">
+                <Text className="font-sans-500 text-label text-success-strong">{infoMessage}</Text>
               </View>
             ) : null}
 
-            <Pressable
+            <Button
+              label={primaryLabel}
               onPress={onSubmit}
-              disabled={submitting}
-              className={`mt-2 items-center justify-center rounded-xl bg-brand-500 py-4 ${
-                submitting ? 'opacity-60' : ''
-              }`}
-            >
-              {submitting ? (
-                <ActivityIndicator color="#ffffff" />
-              ) : (
-                <Text className="text-base font-semibold text-white">{primaryLabel}</Text>
-              )}
-            </Pressable>
+              loading={submitting}
+              variant="primary"
+              className="mt-2"
+            />
           </View>
 
           <Pressable
@@ -244,7 +244,7 @@ export default function AuthScreen() {
             }}
             className="mt-6 items-center"
           >
-            <Text className="text-sm font-semibold text-brand-600">{toggleLabel}</Text>
+            <Text className="font-sans-600 text-label text-brand-200">{toggleLabel}</Text>
           </Pressable>
         </View>
       </ScrollView>

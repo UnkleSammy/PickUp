@@ -52,25 +52,27 @@ export default function GameCard({ game, distanceMeters }: GameCardProps) {
   return (
     <Pressable
       onPress={() => router.push({ pathname: '/game-lobby', params: { id: game.id } })}
-      className="rounded-2xl border border-gray-200 bg-white p-4"
+      className="rounded-2xl border border-muted-border bg-white p-4"
     >
       <View className="flex-row items-center justify-between">
-        <Text className="text-base font-bold text-gray-900">{game.sport}</Text>
+        <Text className="font-sans-600 text-subheading text-muted-ink">{game.sport}</Text>
         {distanceMeters != null ? (
-          <Text className="text-xs font-medium text-gray-400">
+          <Text className="font-sans-500 text-caption text-muted">
             {formatDistance(distanceMeters)} away
           </Text>
         ) : null}
       </View>
 
-      <Text className="mt-1 text-sm font-semibold text-gray-700">{game.court_name}</Text>
-      <Text className="mt-0.5 text-sm text-gray-500">{formatWhen(game.scheduled_at)}</Text>
+      <Text className="mt-1 font-sans-500 text-label text-brand-600">{game.court_name}</Text>
+      <Text className="mt-0.5 font-sans text-caption text-muted">
+        {formatWhen(game.scheduled_at)}
+      </Text>
 
       <View className="mt-3 flex-row items-center justify-between">
-        <View className="rounded-full bg-gray-100 px-3 py-1">
-          <Text className="text-xs font-medium text-gray-600">{statusLabel}</Text>
+        <View className="rounded-full bg-brand-100 px-3 py-1">
+          <Text className="font-sans-500 text-caption text-brand-700">{statusLabel}</Text>
         </View>
-        <Text className="text-xs font-semibold text-brand-600">View roster ›</Text>
+        <Text className="font-sans-600 text-caption text-brand-600">View roster ›</Text>
       </View>
     </Pressable>
   );

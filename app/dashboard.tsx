@@ -1,13 +1,15 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, Text, View } from 'react-native';
+import { ActivityIndicator, ScrollView, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 
+import Button from '@/components/Button';
 import GameCard from '@/components/GameCard';
 import GameFilters, {
   DISTANCE_OPTIONS,
   type DistanceFilterOption,
 } from '@/components/GameFilters';
 import GameMap from '@/components/GameMap';
+import Wordmark from '@/components/Wordmark';
 import { withErrorNotification } from '@/lib/async-mutation';
 import { useAuth } from '@/lib/auth-context';
 import {
@@ -270,29 +272,31 @@ export default function MatchFinderScreen() {
   }, [gamesWithDistance, selectedSport, selectedDistance, hasRealLocation]);
 
   return (
-    <View className="flex-1 bg-white">
-      <View className="border-b border-gray-100 px-5 pb-4 pt-16">
-        <Text className="text-2xl font-bold text-gray-900">Match Finder</Text>
-        <Text className="mt-1 text-sm text-gray-500">Discover pickup games near you.</Text>
+    <View className="flex-1 bg-brand-50">
+      <View className="border-b border-muted-border bg-brand-50 px-5 pb-4 pt-16">
+        <Wordmark tone="light" className="text-title" />
+        <Text className="mt-2 font-sans text-body text-brand-600">
+          Discover pickup games near you.
+        </Text>
       </View>
 
       <ScrollView className="flex-1" contentContainerStyle={{ paddingBottom: 24 }}>
         {/* Invitations */}
         {invitations.length > 0 ? (
           <View className="px-5 pt-4">
-            <Text className="mb-2 text-sm font-semibold text-gray-400">
+            <Text className="mb-2 font-sans-600 text-label text-brand-600">
               Your invitations ({invitations.length})
             </Text>
             <View className="space-y-2">
               {invitations.map((invitation) => (
-                <View key={invitation.id} className="rounded-2xl border border-gray-200 p-4">
+                <View key={invitation.id} className="rounded-2xl border border-muted-border bg-white p-4">
                   <View className="flex-row items-center justify-between">
                     <View className="flex-1 pr-3">
-                      <Text className="text-sm font-semibold text-gray-900">
+                      <Text className="font-sans-600 text-label text-muted-ink">
                         {invitation.games?.sport ?? 'Game'}
                         {invitation.games?.court_name ? ` · ${invitation.games.court_name}` : ''}
                       </Text>
-                      <Text className="mt-0.5 text-xs text-gray-500">
+                      <Text className="mt-0.5 font-sans text-caption text-muted">
                         {invitation.games?.scheduled_at
                           ? formatInviteWhen(invitation.games.scheduled_at)
                           : ''}
@@ -300,12 +304,12 @@ export default function MatchFinderScreen() {
                     </View>
                     <View
                       className={`rounded-full px-2.5 py-1 ${
-                        invitation.host_invited ? 'bg-brand-50' : 'bg-amber-50'
+                        invitation.host_invited ? 'bg-brand-50' : 'bg-warning-soft'
                       }`}
                     >
                       <Text
-                        className={`text-xs font-semibold ${
-                          invitation.host_invited ? 'text-brand-700' : 'text-amber-700'
+                        className={`font-sans-600 text-caption ${
+                          invitation.host_invited ? 'text-brand-700' : 'text-warning-strong'
                         }`}
                       >
                         {invitation.host_invited ? 'Invited to play' : 'Awaiting approval'}
@@ -315,31 +319,27 @@ export default function MatchFinderScreen() {
 
                   {invitation.host_invited ? (
                     <View className="mt-3 flex-row gap-2">
-                      <Pressable
+                      <Button
+                        label="Decline"
                         onPress={() => handleResolveInvitation(invitation.id, 'declined')}
                         disabled={resolvingInviteId === invitation.id}
-                        className="flex-1 items-center justify-center rounded-xl bg-gray-100 py-2.5"
-                      >
-                        <Text className="text-sm font-semibold text-gray-700">Decline</Text>
-                      </Pressable>
-                      <Pressable
+                        variant="secondary"
+                        className="flex-1"
+                      />
+                      <Button
+                        label="Accept"
                         onPress={() => handleResolveInvitation(invitation.id, 'accepted')}
-                        disabled={resolvingInviteId === invitation.id}
-                        className="flex-1 items-center justify-center rounded-xl bg-brand-500 py-2.5"
-                      >
-                        {resolvingInviteId === invitation.id ? (
-                          <ActivityIndicator color="#ffffff" />
-                        ) : (
-                          <Text className="text-sm font-semibold text-white">Accept</Text>
-                        )}
-                      </Pressable>
+                        loading={resolvingInviteId === invitation.id}
+                        variant="primary"
+                        className="flex-1"
+                      />
                     </View>
                   ) : null}
                 </View>
               ))}
             </View>
             {inviteError ? (
-              <Text className="mt-2 text-xs text-red-600">{inviteError}</Text>
+              <Text className="mt-2 font-sans text-caption text-danger-strong">{inviteError}</Text>
             ) : null}
           </View>
         ) : null}
@@ -359,24 +359,26 @@ export default function MatchFinderScreen() {
         />
 
         <View className="mt-6 px-5">
-          <Text className="mb-3 text-sm font-semibold text-gray-400">
+          <Text className="mb-3 font-sans-600 text-label text-brand-600">
             Games near you ({visibleGames.length})
           </Text>
 
           {loading ? (
             <View className="items-center justify-center py-10">
-              <ActivityIndicator color="#4f46e5" />
+              <ActivityIndicator color="#46514B" />
             </View>
           ) : error ? (
-            <View className="items-center justify-center rounded-2xl border border-dashed border-gray-200 px-6 py-10">
-              <Text className="text-center font-medium text-gray-500">{error}</Text>
-              <Text className="mt-2 text-center text-sm text-gray-400">
+            <View className="items-center justify-center rounded-2xl border border-dashed border-muted-border bg-brand-50 px-6 py-10">
+              <Text className="text-center font-sans-500 text-label text-brand-700">{error}</Text>
+              <Text className="mt-2 text-center font-sans text-caption text-brand-600">
                 Games will appear here once things are connected.
               </Text>
             </View>
           ) : visibleGames.length === 0 ? (
-            <View className="items-center justify-center rounded-2xl border border-dashed border-gray-200 py-10">
-              <Text className="text-gray-400">No games match your filters.</Text>
+            <View className="items-center justify-center rounded-2xl border border-dashed border-muted-border bg-brand-50 py-10">
+              <Text className="font-sans-500 text-label text-brand-600">
+                No games match your filters.
+              </Text>
             </View>
           ) : (
             <View className="space-y-3">
@@ -388,30 +390,27 @@ export default function MatchFinderScreen() {
         </View>
       </ScrollView>
 
-      <View className="space-y-2 border-t border-gray-100 p-5">
-        <Pressable
+      <View className="space-y-2 border-t border-muted-border bg-brand-50 p-5">
+        <Button
+          label="Create a game"
           onPress={() => router.push('/create-game')}
-          className="items-center justify-center rounded-xl bg-brand-500 py-4"
-        >
-          <Text className="text-base font-semibold text-white">Create a game</Text>
-        </Pressable>
-        <View className="flex-row space-x-2">
-          <Pressable
+          variant="primary"
+        />
+        <View className="flex-row gap-2">
+          <Button
+            label="Game Lobby"
             onPress={() => router.push('/game-lobby')}
-            className="flex-1 items-center justify-center rounded-xl border border-gray-200 py-3"
-          >
-            <Text className="text-sm font-semibold text-gray-700">Game Lobby</Text>
-          </Pressable>
-          <Pressable
+            variant="secondary"
+            className="flex-1"
+          />
+          <Button
+            label="Live Match"
             onPress={() => router.push('/live-match')}
-            className="flex-1 items-center justify-center rounded-xl border border-gray-200 py-3"
-          >
-            <Text className="text-sm font-semibold text-gray-700">Live Match</Text>
-          </Pressable>
+            variant="secondary"
+            className="flex-1"
+          />
         </View>
-        <Pressable onPress={signOut} className="items-center justify-center py-2">
-          <Text className="text-sm font-medium text-gray-400">Sign out</Text>
-        </Pressable>
+        <Button label="Sign out" onPress={signOut} variant="ghost" />
       </View>
     </View>
   );
