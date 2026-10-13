@@ -40,7 +40,6 @@ const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', '
 
 const DEFAULT_FOULS_LIMIT = 6;
 const DEFAULT_HALF_DURATION_MINS = 20;
-const DEFAULT_PENALTY_TYPE = 'Personal foul';
 const MAX_PLAYER_LIMIT = 100;
 
 function startOfDay(d: Date): Date {
@@ -184,7 +183,8 @@ export default function CreateGameScreen() {
   // Step 2 — Rules & penalties
   const [foulsLimit, setFoulsLimit] = useState(DEFAULT_FOULS_LIMIT);
   const [halfDurationMins, setHalfDurationMins] = useState(DEFAULT_HALF_DURATION_MINS);
-  const [penaltyType, setPenaltyType] = useState(DEFAULT_PENALTY_TYPE);
+  const [penaltyTypes, setPenaltyTypes] = useState<string[]>([]);
+  const [customRulesEnabled, setCustomRulesEnabled] = useState(false);
   const [rulesText, setRulesText] = useState('');
 
   // Step 3 — Roles & limits
@@ -225,6 +225,12 @@ export default function CreateGameScreen() {
     [showToast],
   );
 
+  const togglePenaltyType = useCallback((preset: string) => {
+    setPenaltyTypes((prev) =>
+      prev.includes(preset) ? prev.filter((p) => p !== preset) : [...prev, preset],
+    );
+  }, []);
+
   // Next 7 days (starting tomorrow) for the date chips.
   const dateOptions = useMemo(() => {
     const today = startOfDay(new Date());
@@ -246,8 +252,6 @@ export default function CreateGameScreen() {
       case 0:
         return sport === null ? 'Pick a sport to continue.' : null;
       case 1:
-        if (rulesText.trim().length === 0) return 'Add a custom rule (or "No special rules").';
-        if (penaltyType.trim().length === 0) return 'Enter a penalty type.';
         if (halfDurationMins <= 0) return 'Half/quarter duration must be at least 1 minute.';
         if (foulsLimit < 0) return 'Fouls limit cannot be negative.';
         return null;
@@ -261,7 +265,7 @@ export default function CreateGameScreen() {
       default:
         return null;
     }
-  }, [step, sport, rulesText, penaltyType, halfDurationMins, foulsLimit, latitude, longitude, courtName, scheduledAt]);
+  }, [step, sport, halfDurationMins, foulsLimit, latitude, longitude, courtName, scheduledAt]);
 
   const handleNext = useCallback(() => {
     const validationError = validateCurrentStep();
@@ -357,10 +361,10 @@ export default function CreateGameScreen() {
             .insert({
               host_id: user.id,
               sport,
-              rules_text: rulesText.trim(),
+              rules_text: customRulesEnabled ? rulesText.trim() : '',
               rules_penalties: {
                 fouls_limit: foulsLimit,
-                penalty_type: penaltyType.trim(),
+                penalty_types: penaltyTypes,
                 half_duration_mins: halfDurationMins,
               } satisfies RulesPenalties,
               latitude,
@@ -398,8 +402,9 @@ export default function CreateGameScreen() {
     latitude,
     longitude,
     rulesText,
+    customRulesEnabled,
     foulsLimit,
-    penaltyType,
+    penaltyTypes,
     halfDurationMins,
     courtName,
     scheduledAt,
@@ -574,48 +579,53 @@ export default function CreateGameScreen() {
               />
 
               <View className="rounded-xl border border-muted-border bg-white px-4 py-3">
-                <Text className="font-sans-500 text-label text-brand-700">Penalty type</Text>
-                <TextInput
-                  value={penaltyType}
-                  onChangeText={setPenaltyType}
-                  placeholder="e.g. Personal foul"
-                  className="mt-2 rounded-lg border border-muted-border bg-white px-3 py-2 font-sans text-body text-muted-ink"
-                  placeholderTextColor="#6B7280"
-                />
+                <Text className="font-sans-500 text-label text-brand-700">Penalty types</Text>
+                <Text className="mt-0.5 font-sans text-caption text-muted">Select all that apply.</Text>
                 <View className="mt-2 flex-row flex-wrap gap-2">
-                  {PENALTY_PRESETS.map((preset) => (
-                    <Pressable
-                      key={preset}
-                      onPress={() => setPenaltyType(preset)}
-                      className={`rounded-full px-3 py-1 ${
-                        penaltyType === preset ? 'bg-brand-500' : 'bg-muted-soft'
-                      }`}
-                    >
-                      <Text
-                        className={`font-sans-500 text-caption ${
-                          penaltyType === preset ? 'text-white' : 'text-muted-ink'
+                  {PENALTY_PRESETS.map((preset) => {
+                    const active = penaltyTypes.includes(preset);
+                    return (
+                      <Pressable
+                        key={preset}
+                        onPress={() => togglePenaltyType(preset)}
+                        className={`rounded-full px-3 py-1 ${
+                          active ? 'bg-brand-500' : 'bg-muted-soft'
                         }`}
                       >
-                        {preset}
-                      </Text>
-                    </Pressable>
-                  ))}
+                        <Text
+                          className={`font-sans-500 text-caption ${
+                            active ? 'text-white' : 'text-muted-ink'
+                          }`}
+                        >
+                          {preset}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
                 </View>
               </View>
 
-              <View className="rounded-xl border border-muted-border bg-white px-4 py-3">
-                <Text className="font-sans-500 text-label text-brand-700">Custom rules</Text>
-                <TextInput
-                  value={rulesText}
-                  onChangeText={setRulesText}
-                  placeholder="e.g. Half-court, winner stays on, no backpacks on court."
-                  multiline
-                  numberOfLines={3}
-                  textAlignVertical="top"
-                  className="mt-2 h-20 rounded-lg border border-muted-border bg-white px-3 py-2 font-sans text-body text-muted-ink"
-                  placeholderTextColor="#6B7280"
-                />
-              </View>
+              <ToggleRow
+                label="Custom rules"
+                hint="Add your own house rules (optional)"
+                value={customRulesEnabled}
+                onValueChange={setCustomRulesEnabled}
+              />
+
+              {customRulesEnabled ? (
+                <View className="rounded-xl border border-muted-border bg-white px-4 py-3">
+                  <TextInput
+                    value={rulesText}
+                    onChangeText={setRulesText}
+                    placeholder="e.g. Half-court, winner stays on, no backpacks on court."
+                    multiline
+                    numberOfLines={3}
+                    textAlignVertical="top"
+                    className="h-20 rounded-lg border border-muted-border bg-white px-3 py-2 font-sans text-body text-muted-ink"
+                    placeholderTextColor="#6B7280"
+                  />
+                </View>
+              ) : null}
             </View>
           ) : null}
 

@@ -32,6 +32,7 @@ import type {
   RolesRequired,
   RulesPenalties,
 } from '@/types/domain';
+import { penaltyTypesOf } from '@/types/domain';
 
 type GamesRow = Database['public']['Tables']['games']['Row'];
 
@@ -778,11 +779,16 @@ export default function GameLobbyScreen() {
               <Text className="font-sans-600 text-caption uppercase tracking-wide text-brand-600">
                 Rules
               </Text>
-              <Text className="mt-1 font-sans text-body leading-5 text-brand-600">
-                {game.rules_text}
-              </Text>
+              {game.rules_text ? (
+                <Text className="mt-1 font-sans text-body leading-5 text-brand-600">
+                  {game.rules_text}
+                </Text>
+              ) : null}
               <Text className="mt-1 font-sans text-body text-muted">
-                Fouls limit {game.rules_penalties.fouls_limit} · {game.rules_penalties.penalty_type}{' '}
+                Fouls limit {game.rules_penalties.fouls_limit}
+                {penaltyTypesOf(game.rules_penalties).length > 0
+                  ? ` · ${penaltyTypesOf(game.rules_penalties).join(' · ')}`
+                  : ''}{' '}
                 · {game.rules_penalties.half_duration_mins}-min halves
               </Text>
             </View>

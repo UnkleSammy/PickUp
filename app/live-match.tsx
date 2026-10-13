@@ -31,6 +31,7 @@ import type {
   RolesRequired,
   RulesPenalties,
 } from '@/types/domain';
+import { penaltyTypesOf } from '@/types/domain';
 
 type GamesRow = Database['public']['Tables']['games']['Row'];
 
@@ -768,9 +769,11 @@ export default function LiveMatchScreen() {
             <Text className="font-sans-600 text-caption uppercase tracking-wide text-brand-600">
               Rules
             </Text>
-            <Text className="mt-2 font-sans text-body leading-5 text-brand-700">
-              {game.rules_text}
-            </Text>
+            {game.rules_text ? (
+              <Text className="mt-2 font-sans text-body leading-5 text-brand-700">
+                {game.rules_text}
+              </Text>
+            ) : null}
             <View className="mt-3 space-y-1.5">
               <View className="flex-row justify-between">
                 <Text className="font-sans text-body text-muted">Fouls limit</Text>
@@ -779,9 +782,9 @@ export default function LiveMatchScreen() {
                 </Text>
               </View>
               <View className="flex-row justify-between">
-                <Text className="font-sans text-body text-muted">Penalty type</Text>
+                <Text className="font-sans text-body text-muted">Penalty types</Text>
                 <Text className="font-sans-600 text-label text-muted-ink">
-                  {game.rules_penalties.penalty_type}
+                  {penaltyTypesOf(game.rules_penalties).join(' · ') || 'None'}
                 </Text>
               </View>
               <View className="flex-row justify-between">
