@@ -5,14 +5,15 @@ const fs = require('fs');
 
 const config = getDefaultConfig(__dirname);
 
-// react-native@0.74.x ships only `Libraries/Utilities/Platform.ios.js` and
-// `Platform.android.js` — no `Platform.js` and no `Platform.web.js`. On web,
-// Metro resolves the deep import `require('../Utilities/Platform')` made inside
-// `Libraries/ReactPrivate/ReactNativePrivateInterface.js` and finds no web or
-// default variant, which 500s the bundle. react-native-web vendors a
-// web-compatible copy of a subset of react-native's internals under
-// `dist/vendor/react-native`; route react-native deep imports through that copy
-// on the `web` platform so they resolve.
+// react-native deep imports (`react-native/Libraries/**` and their relative
+// `../Utilities/*` counterparts) must still be routed through react-native-web's
+// vendored `dist/vendor/react-native` copy on `web`. RN 0.74 shipped only
+// `Platform.ios.js`/`Platform.android.js` (no web/default variant); RN 0.86 now
+// ships a `Libraries/Utilities/Platform.js`, but it is only a self-referential
+// backwards-compat stub (`import Platform from './Platform'`) for subpath deep
+// imports — not a real web implementation. react-native-web vendors an actual
+// web-compatible copy of these internals, so keep routing deep imports through
+// it on the `web` platform. (Re-evaluated during the SDK 57 upgrade.)
 const RN_WEB_VENDOR = path.join(
   __dirname,
   'node_modules/react-native-web/dist/vendor/react-native',
