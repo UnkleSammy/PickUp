@@ -17,12 +17,26 @@ export type RatingRow = Database['public']['Tables']['ratings']['Row'];
 
 /**
  * `games.rules_penalties`
- * `{ fouls_limit: integer, penalty_type: string, half_duration_mins: integer }`
+ * `{ fouls_limit: integer, penalty_types: string[], half_duration_mins: integer }`
  */
 export interface RulesPenalties {
   fouls_limit: number;
-  penalty_type: string;
+  penalty_types: string[];
   half_duration_mins: number;
+}
+
+/**
+ * Normalize `rules_penalties` penalty types across old (single `penalty_type`
+ * string) and new (`penalty_types` array) rows. Never throws and always returns
+ * an array, so renderers can safely call `.join(...)`.
+ */
+export function penaltyTypesOf(rules: RulesPenalties | null | undefined): string[] {
+  if (!rules) return [];
+  if (Array.isArray(rules.penalty_types)) {
+    return rules.penalty_types.filter((t): t is string => typeof t === 'string' && t.length > 0);
+  }
+  const legacy = (rules as unknown as { penalty_type?: unknown }).penalty_type;
+  return typeof legacy === 'string' && legacy.length > 0 ? [legacy] : [];
 }
 
 /**

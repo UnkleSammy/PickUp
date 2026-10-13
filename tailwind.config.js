@@ -11,6 +11,11 @@
 module.exports = {
   content: ['./app/**/*.{js,jsx,ts,tsx}', './components/**/*.{js,jsx,ts,tsx}'],
   presets: [require('nativewind/preset')],
+  // Class-based dark mode makes NativeWind emit `--css-interop-darkMode: class`,
+  // which lets expo-status-bar (with `userInterfaceStyle: "light"`) set the color
+  // scheme on web without throwing "Cannot manually set color scheme, as dark
+  // mode is type 'media'". The app itself stays light-first (no `dark:` variants).
+  darkMode: 'class',
   theme: {
     extend: {
       colors: {
