@@ -19,7 +19,13 @@ import {
   type Coordinate,
 } from '@/lib/geo';
 import { getSupabase, isSupabaseConfigured } from '@/lib/supabase';
-import type { Game, ParticipantRole, RolesRequired, RulesPenalties } from '@/types/domain';
+import type {
+  Game,
+  GameStructure,
+  ParticipantRole,
+  RolesRequired,
+  RulesPenalties,
+} from '@/types/domain';
 
 /** A participant row in 'invited' joined with its game summary. */
 interface Invitation {
@@ -93,6 +99,7 @@ export default function MatchFinderScreen() {
       ...row,
       rules_penalties: row.rules_penalties as unknown as RulesPenalties,
       roles_required: row.roles_required as unknown as RolesRequired,
+      game_structure: row.game_structure as unknown as GameStructure,
     }));
   }, []);
 

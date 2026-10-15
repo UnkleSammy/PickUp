@@ -16,8 +16,24 @@ import Button from '@/components/Button';
 import GameMapPicker, { type MockCourt } from '@/components/GameMapPicker';
 import { withErrorNotification } from '@/lib/async-mutation';
 import { useAuth } from '@/lib/auth-context';
+import {
+  BREAK_LENGTH_MAX_MINS,
+  BREAK_LENGTH_MIN_MINS,
+  OVERTIME_LENGTH_MAX_MINS,
+  OVERTIME_LENGTH_MIN_MINS,
+  PERIOD_COUNT_BY_FORMAT,
+  PERIOD_COUNT_MAX,
+  PERIOD_COUNT_MIN,
+  PERIOD_LENGTH_MAX_MINS,
+  PERIOD_LENGTH_MIN_MINS,
+  TARGET_SCORE_VALUES,
+  validateGameStructure,
+  WIN_BY_MAX,
+  WIN_BY_MIN,
+} from '@/lib/game-structure';
 import { getSupabase, SUPABASE_CONFIG_ERROR } from '@/lib/supabase';
-import type { RolesRequired, RulesPenalties } from '@/types/domain';
+import type { Json } from '@/types/database.types';
+import type { ClockMode, GameFormat, GameStructure, RolesRequired } from '@/types/domain';
 
 type Sport = 'Basketball' | 'Soccer' | 'Volleyball' | 'Football' | 'Tennis';
 
@@ -32,15 +48,186 @@ const SPORTS: { key: Sport; label: string; emoji: string }[] = [
 const PENALTY_PRESETS = ['Personal foul', 'Technical foul', 'Team foul', 'Free throw'];
 
 const STEP_LABELS = ['Sport', 'Rules', 'Roles', 'Location'] as const;
-const STEP_TITLES = ['Step 1 — Sport', 'Step 2 — Rules & Penalties', 'Step 3 — Roles & Limits', 'Step 4 — Location & Time'];
+const STEP_TITLES = ['Step 1 — Sport', 'Step 2 — Rules & Structure', 'Step 3 — Roles & Limits', 'Step 4 — Location & Time'];
 const TOTAL_STEPS = STEP_LABELS.length;
 
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
 const DEFAULT_FOULS_LIMIT = 6;
-const DEFAULT_HALF_DURATION_MINS = 20;
 const MAX_PLAYER_LIMIT = 100;
+
+// --- Game structure presets --------------------------------------------------------
+// The five named formats. Each preset builds a complete, valid `GameStructure`
+// with sport-aware defaults seeded from Step 1 (see design §1.3 + the
+// owner-approved `first_to` "Run to score" extension).
+
+type PresetKey = GameFormat;
+
+function isSetBased(sport: Sport | null): boolean {
+  return sport === 'Volleyball' || sport === 'Tennis';
+}
+
+/** Halves period length — 20 min basketball, 25 min soccer & football. */
+function halvesLength(sport: Sport | null): number {
+  return sport === 'Soccer' || sport === 'Football' ? 25 : 20;
+}
+
+/** Halves clock — running for most, running + stoppage time for soccer. */
+function halvesClock(sport: Sport | null): ClockMode {
+  return sport === 'Soccer' ? 'running_added' : 'running';
+}
+
+/**
+ * Build a complete `GameStructure` for a preset. `first_to` is score-based: the
+ * time-based fields carry benign defaults and are ignored by validation.
+ */
+function buildStructure(format: GameFormat, sport: Sport | null): GameStructure {
+  switch (format) {
+    case 'halves':
+      return {
+        format: 'halves',
+        period_count: 2,
+        period_length_mins: halvesLength(sport),
+        break_length_mins: 5,
+        overtime_length_mins: null,
+        clock_mode: halvesClock(sport),
+        target_score: null,
+        win_by: null,
+      };
+    case 'quarters':
+      return {
+        format: 'quarters',
+        period_count: 4,
+        period_length_mins: 10,
+        break_length_mins: 2,
+        overtime_length_mins: null,
+        clock_mode: 'stopped',
+        target_score: null,
+        win_by: null,
+      };
+    case 'periods':
+      return {
+        format: 'periods',
+        period_count: 3,
+        period_length_mins: 15,
+        break_length_mins: 2,
+        overtime_length_mins: null,
+        clock_mode: 'running',
+        target_score: null,
+        win_by: null,
+      };
+    case 'single':
+      return {
+        format: 'single',
+        period_count: 1,
+        period_length_mins: 60,
+        break_length_mins: 0,
+        overtime_length_mins: null,
+        clock_mode: 'running',
+        target_score: null,
+        win_by: null,
+      };
+    case 'first_to':
+      return {
+        format: 'first_to',
+        period_count: 2,
+        period_length_mins: 20,
+        break_length_mins: 0,
+        overtime_length_mins: null,
+        clock_mode: 'running',
+        target_score: 11,
+        win_by: 2,
+      };
+  }
+}
+
+interface PresetDef {
+  key: PresetKey;
+  label: string;
+  icon: string;
+  summary: (sport: Sport | null) => string;
+  build: (sport: Sport | null) => GameStructure;
+}
+
+const PRESETS: PresetDef[] = [
+  {
+    key: 'halves',
+    label: 'Halves',
+    icon: '⏱️',
+    summary: (sport) => `2 × ${halvesLength(sport)} min, 5 min halftime`,
+    build: (sport) => buildStructure('halves', sport),
+  },
+  {
+    key: 'quarters',
+    label: 'Quarters',
+    icon: '🔳',
+    summary: () => '4 × 10 min, 2 min breaks',
+    build: (sport) => buildStructure('quarters', sport),
+  },
+  {
+    key: 'periods',
+    label: 'Periods',
+    icon: '🎚️',
+    summary: () => '3 × 15 min, 2 min breaks',
+    build: (sport) => buildStructure('periods', sport),
+  },
+  {
+    key: 'single',
+    label: 'Run the clock',
+    icon: '⚡',
+    summary: () => 'One 60-min running block',
+    build: (sport) => buildStructure('single', sport),
+  },
+  {
+    key: 'first_to',
+    label: 'Run to score',
+    icon: '🎯',
+    summary: () => 'First to 11, win by 2',
+    build: (sport) => buildStructure('first_to', sport),
+  },
+];
+
+const CLOCK_MODE_OPTIONS: { value: ClockMode; label: string }[] = [
+  { value: 'stopped', label: 'Stopped clock' },
+  { value: 'running', label: 'Running clock' },
+  { value: 'running_added', label: 'Running + stoppage time' },
+];
+
+function clockPhrase(mode: ClockMode): string {
+  switch (mode) {
+    case 'stopped':
+      return 'stopped clock';
+    case 'running':
+      return 'running clock';
+    case 'running_added':
+      return 'running clock + stoppage time';
+  }
+}
+
+/**
+ * Plain-language restatement of the current structure (the "read a sentence"
+ * surface — design §2.2 Section B).
+ */
+function summarizeStructure(s: GameStructure): string {
+  if (s.format === 'first_to') {
+    return `First to ${s.target_score ?? 11}, win by ${s.win_by ?? 2}`;
+  }
+  const overtime =
+    s.overtime_length_mins != null
+      ? ` · ${s.overtime_length_mins} min overtime`
+      : ' · no overtime';
+  switch (s.format) {
+    case 'halves':
+      return `${s.period_count} × ${s.period_length_mins} min halves · ${s.break_length_mins} min halftime · ${clockPhrase(s.clock_mode)}${overtime}`;
+    case 'quarters':
+      return `${s.period_count} × ${s.period_length_mins} min quarters · ${s.break_length_mins} min breaks · ${clockPhrase(s.clock_mode)}${overtime}`;
+    case 'periods':
+      return `${s.period_count} × ${s.period_length_mins} min periods · ${s.break_length_mins} min breaks · ${clockPhrase(s.clock_mode)}${overtime}`;
+    case 'single':
+      return `${s.period_length_mins} min running block · ${clockPhrase(s.clock_mode)}${overtime}`;
+  }
+}
 
 function startOfDay(d: Date): Date {
   const x = new Date(d);
@@ -169,6 +356,19 @@ function ToggleRow({
   );
 }
 
+/** A derived field shown read-only so the host sees it is locked, not broken. */
+function ReadOnlyField({ label, hint }: { label: string; hint: string }) {
+  return (
+    <View className="flex-row items-center justify-between rounded-xl border border-muted-border bg-white px-4 py-3">
+      <View className="flex-1 pr-3">
+        <Text className="font-sans-500 text-label text-brand-700">{label}</Text>
+        <Text className="mt-0.5 font-sans text-caption text-muted">{hint}</Text>
+      </View>
+      <Text className="font-sans-600 text-caption text-brand-600">Fixed</Text>
+    </View>
+  );
+}
+
 // --- Screen ------------------------------------------------------------------------
 
 export default function CreateGameScreen() {
@@ -180,9 +380,10 @@ export default function CreateGameScreen() {
   // Step 1 — Sport
   const [sport, setSport] = useState<Sport | null>(null);
 
-  // Step 2 — Rules & penalties
+  // Step 2 — Rules & structure
   const [foulsLimit, setFoulsLimit] = useState(DEFAULT_FOULS_LIMIT);
-  const [halfDurationMins, setHalfDurationMins] = useState(DEFAULT_HALF_DURATION_MINS);
+  const [structure, setStructure] = useState<GameStructure>(() => buildStructure('halves', null));
+  const [detailsOpen, setDetailsOpen] = useState(false);
   const [penaltyTypes, setPenaltyTypes] = useState<string[]>([]);
   const [customRulesEnabled, setCustomRulesEnabled] = useState(false);
   const [rulesText, setRulesText] = useState('');
@@ -231,6 +432,35 @@ export default function CreateGameScreen() {
     );
   }, []);
 
+  // Selecting a sport seeds the structure's sport-aware defaults (period length
+  // and clock behavior for halves), without discarding the rest of the model.
+  const selectSport = useCallback((s: Sport) => {
+    setSport(s);
+    setInlineError(null);
+    setStructure((prev) => {
+      if (prev.format === 'halves') {
+        return { ...prev, period_length_mins: halvesLength(s), clock_mode: halvesClock(s) };
+      }
+      return prev;
+    });
+  }, []);
+
+  // One-tap preset selection: rewrite the whole structure with that preset's
+  // sport-aware defaults.
+  const applyPreset = useCallback(
+    (key: PresetKey) => {
+      const preset = PRESETS.find((p) => p.key === key);
+      if (!preset) return;
+      setStructure(preset.build(sport));
+      setInlineError(null);
+    },
+    [sport],
+  );
+
+  const patchStructure = useCallback((patch: Partial<GameStructure>) => {
+    setStructure((prev) => ({ ...prev, ...patch }));
+  }, []);
+
   // Next 7 days (starting tomorrow) for the date chips.
   const dateOptions = useMemo(() => {
     const today = startOfDay(new Date());
@@ -251,10 +481,14 @@ export default function CreateGameScreen() {
     switch (step) {
       case 0:
         return sport === null ? 'Pick a sport to continue.' : null;
-      case 1:
-        if (halfDurationMins <= 0) return 'Half/quarter duration must be at least 1 minute.';
+      case 1: {
         if (foulsLimit < 0) return 'Fouls limit cannot be negative.';
+        // The form constrains fields by construction, but validate anyway so a
+        // malformed structure can never reach the INSERT.
+        const validation = validateGameStructure(structure);
+        if (!validation.ok) return validation.errors[0] ?? 'Game structure is invalid.';
         return null;
+      }
       case 2:
         return null; // toggles + a 0+ counter are always valid
       case 3:
@@ -265,7 +499,7 @@ export default function CreateGameScreen() {
       default:
         return null;
     }
-  }, [step, sport, halfDurationMins, foulsLimit, latitude, longitude, courtName, scheduledAt]);
+  }, [step, sport, structure, foulsLimit, latitude, longitude, courtName, scheduledAt]);
 
   const handleNext = useCallback(() => {
     const validationError = validateCurrentStep();
@@ -365,8 +599,8 @@ export default function CreateGameScreen() {
               rules_penalties: {
                 fouls_limit: foulsLimit,
                 penalty_types: penaltyTypes,
-                half_duration_mins: halfDurationMins,
-              } satisfies RulesPenalties,
+              },
+              game_structure: structure as unknown as Json,
               latitude,
               longitude,
               court_name: courtName.trim(),
@@ -405,7 +639,7 @@ export default function CreateGameScreen() {
     customRulesEnabled,
     foulsLimit,
     penaltyTypes,
-    halfDurationMins,
+    structure,
     courtName,
     scheduledAt,
     refereeRequired,
@@ -535,10 +769,7 @@ export default function CreateGameScreen() {
                 return (
                   <Pressable
                     key={s.key}
-                    onPress={() => {
-                      setSport(s.key);
-                      setInlineError(null);
-                    }}
+                    onPress={() => selectSport(s.key)}
                     className={`mb-3 w-[48%] items-center rounded-2xl border py-5 ${
                       active ? 'border-brand-500 bg-brand-50' : 'border-muted-border bg-white'
                     }`}
@@ -557,9 +788,263 @@ export default function CreateGameScreen() {
             </View>
           ) : null}
 
-          {/* Step 2 — Rules & penalties */}
+          {/* Step 2 — Rules & structure */}
           {step === 1 ? (
             <View className="mt-4 space-y-3">
+              {/* Structure (hidden for set-based sports — scoring lives in rules_text) */}
+              {isSetBased(sport) ? (
+                <View className="rounded-xl border border-dashed border-muted-border bg-white px-4 py-3">
+                  <Text className="font-sans-500 text-label text-brand-700">No clock structure</Text>
+                  <Text className="mt-0.5 font-sans text-caption leading-4 text-muted">
+                    {sport} is set-based. Add scoring rules (e.g. “first to 21, best of 3”) in
+                    Custom rules below.
+                  </Text>
+                </View>
+              ) : (
+                <>
+                  {/* Preset cards */}
+                  <View className="flex-row flex-wrap justify-between">
+                    {PRESETS.map((preset) => {
+                      const active = structure.format === preset.key;
+                      return (
+                        <Pressable
+                          key={preset.key}
+                          onPress={() => applyPreset(preset.key)}
+                          accessibilityRole="button"
+                          className={`relative mb-3 w-[48%] rounded-2xl border px-3 py-4 ${
+                            active ? 'border-brand-500 bg-brand-50' : 'border-muted-border bg-white'
+                          }`}
+                        >
+                          {active ? (
+                            <View className="absolute right-2 top-2 h-5 w-5 items-center justify-center rounded-full bg-brand-500">
+                              <Text className="font-sans-700 text-micro text-white">✓</Text>
+                            </View>
+                          ) : null}
+                          <Text className="text-3xl">{preset.icon}</Text>
+                          <Text
+                            className={`mt-2 text-label ${
+                              active ? 'font-sans-700 text-brand-700' : 'font-sans-600 text-muted-ink'
+                            }`}
+                          >
+                            {preset.label}
+                          </Text>
+                          <Text
+                            className={`mt-0.5 font-sans text-caption leading-4 ${
+                              active ? 'text-brand-600' : 'text-muted'
+                            }`}
+                          >
+                            {preset.summary(sport)}
+                          </Text>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+
+                  {/* Summary sentence */}
+                  <View className="rounded-xl bg-brand-50 px-4 py-3">
+                    <Text className="font-sans-600 text-caption uppercase tracking-wide text-brand-600">
+                      Game structure
+                    </Text>
+                    <Text className="mt-1 font-sans-500 text-body leading-5 text-brand-700">
+                      {summarizeStructure(structure)}
+                    </Text>
+                  </View>
+
+                  {/* Adjust details */}
+                  <Pressable
+                    onPress={() => setDetailsOpen((o) => !o)}
+                    accessibilityRole="button"
+                    className="flex-row items-center justify-between rounded-xl border border-muted-border bg-white px-4 py-3"
+                  >
+                    <Text className="font-sans-600 text-label text-brand-700">Adjust details</Text>
+                    <Text className="font-sans-600 text-label text-brand-600">
+                      {detailsOpen ? '▾' : '▸'}
+                    </Text>
+                  </Pressable>
+
+                  {detailsOpen ? (
+                    <View className="space-y-3 rounded-2xl border border-muted-border bg-brand-50 p-3">
+                      {structure.format === 'first_to' ? (
+                        <>
+                          <View className="rounded-xl border border-muted-border bg-white px-4 py-3">
+                            <Text className="font-sans-500 text-label text-brand-700">
+                              Target score
+                            </Text>
+                            <Text className="mt-0.5 font-sans text-caption text-muted">
+                              Play to this many points.
+                            </Text>
+                            <View className="mt-2 flex-row flex-wrap gap-2">
+                              {TARGET_SCORE_VALUES.map((score) => {
+                                const active = structure.target_score === score;
+                                return (
+                                  <Pressable
+                                    key={score}
+                                    onPress={() => patchStructure({ target_score: score })}
+                                    className={`rounded-full px-3 py-1 ${
+                                      active ? 'bg-brand-500' : 'bg-muted-soft'
+                                    }`}
+                                  >
+                                    <Text
+                                      className={`font-sans-500 text-caption ${
+                                        active ? 'text-white' : 'text-muted-ink'
+                                      }`}
+                                    >
+                                      {score}
+                                    </Text>
+                                  </Pressable>
+                                );
+                              })}
+                            </View>
+                          </View>
+
+                          <Stepper
+                            label="Win by"
+                            hint={`${structure.win_by ?? 2} ${structure.win_by === 1 ? 'point' : 'points'}`}
+                            onDecrement={() =>
+                              patchStructure({ win_by: Math.max(WIN_BY_MIN, (structure.win_by ?? 2) - 1) })
+                            }
+                            onIncrement={() =>
+                              patchStructure({ win_by: Math.min(WIN_BY_MAX, (structure.win_by ?? 2) + 1) })
+                            }
+                            canDecrement={(structure.win_by ?? 2) > WIN_BY_MIN}
+                            canIncrement={(structure.win_by ?? 2) < WIN_BY_MAX}
+                          />
+                        </>
+                      ) : (
+                        <>
+                          {structure.format === 'periods' ? (
+                            <Stepper
+                              label="Number of periods"
+                              hint={`${structure.period_count} ${structure.period_count === 1 ? 'period' : 'periods'}`}
+                              onDecrement={() =>
+                                patchStructure({ period_count: Math.max(PERIOD_COUNT_MIN, structure.period_count - 1) })
+                              }
+                              onIncrement={() =>
+                                patchStructure({ period_count: Math.min(PERIOD_COUNT_MAX, structure.period_count + 1) })
+                              }
+                              canDecrement={structure.period_count > PERIOD_COUNT_MIN}
+                              canIncrement={structure.period_count < PERIOD_COUNT_MAX}
+                            />
+                          ) : (
+                            <ReadOnlyField
+                              label="Number of periods"
+                              hint={`${structure.period_count} (fixed for ${structure.format})`}
+                            />
+                          )}
+
+                          <Stepper
+                            label="Period length"
+                            hint={`${structure.period_length_mins} min`}
+                            onDecrement={() =>
+                              patchStructure({
+                                period_length_mins: Math.max(PERIOD_LENGTH_MIN_MINS, structure.period_length_mins - 1),
+                              })
+                            }
+                            onIncrement={() =>
+                              patchStructure({
+                                period_length_mins: Math.min(PERIOD_LENGTH_MAX_MINS, structure.period_length_mins + 1),
+                              })
+                            }
+                            canDecrement={structure.period_length_mins > PERIOD_LENGTH_MIN_MINS}
+                            canIncrement={structure.period_length_mins < PERIOD_LENGTH_MAX_MINS}
+                          />
+
+                          {structure.format !== 'single' ? (
+                            <Stepper
+                              label="Halftime / break"
+                              hint={`${structure.break_length_mins} min`}
+                              onDecrement={() =>
+                                patchStructure({
+                                  break_length_mins: Math.max(BREAK_LENGTH_MIN_MINS, structure.break_length_mins - 1),
+                                })
+                              }
+                              onIncrement={() =>
+                                patchStructure({
+                                  break_length_mins: Math.min(BREAK_LENGTH_MAX_MINS, structure.break_length_mins + 1),
+                                })
+                              }
+                              canDecrement={structure.break_length_mins > BREAK_LENGTH_MIN_MINS}
+                              canIncrement={structure.break_length_mins < BREAK_LENGTH_MAX_MINS}
+                            />
+                          ) : null}
+
+                          <ToggleRow
+                            label="Add overtime"
+                            hint="Timed overtime period"
+                            value={structure.overtime_length_mins != null}
+                            onValueChange={(on) =>
+                              patchStructure({ overtime_length_mins: on ? 5 : null })
+                            }
+                          />
+
+                          {structure.overtime_length_mins != null ? (
+                            <Stepper
+                              label="Overtime length"
+                              hint={`${structure.overtime_length_mins} min`}
+                              onDecrement={() =>
+                                patchStructure({
+                                  overtime_length_mins: Math.max(
+                                    OVERTIME_LENGTH_MIN_MINS,
+                                    structure.overtime_length_mins! - 1,
+                                  ),
+                                })
+                              }
+                              onIncrement={() =>
+                                patchStructure({
+                                  overtime_length_mins: Math.min(
+                                    OVERTIME_LENGTH_MAX_MINS,
+                                    structure.overtime_length_mins! + 1,
+                                  ),
+                                })
+                              }
+                              canDecrement={structure.overtime_length_mins > OVERTIME_LENGTH_MIN_MINS}
+                              canIncrement={structure.overtime_length_mins < OVERTIME_LENGTH_MAX_MINS}
+                            />
+                          ) : null}
+
+                          <View className="rounded-xl border border-muted-border bg-white px-4 py-3">
+                            <Text className="font-sans-500 text-label text-brand-700">Clock</Text>
+                            <Text className="mt-0.5 font-sans text-caption text-muted">
+                              How the clock runs on dead balls.
+                            </Text>
+                            <View className="mt-2 space-y-2">
+                              {CLOCK_MODE_OPTIONS.map((option) => {
+                                const active = structure.clock_mode === option.value;
+                                return (
+                                  <Pressable
+                                    key={option.value}
+                                    onPress={() => patchStructure({ clock_mode: option.value })}
+                                    accessibilityRole="button"
+                                    className={`flex-row items-center justify-between rounded-lg border px-3 py-2.5 ${
+                                      active
+                                        ? 'border-brand-500 bg-brand-50'
+                                        : 'border-muted-border bg-white'
+                                    }`}
+                                  >
+                                    <Text
+                                      className={`text-label ${
+                                        active
+                                          ? 'font-sans-600 text-brand-700'
+                                          : 'font-sans-500 text-muted-ink'
+                                      }`}
+                                    >
+                                      {option.label}
+                                    </Text>
+                                    {active ? (
+                                      <Text className="font-sans-700 text-label text-brand-500">✓</Text>
+                                    ) : null}
+                                  </Pressable>
+                                );
+                              })}
+                            </View>
+                          </View>
+                        </>
+                      )}
+                    </View>
+                  ) : null}
+                </>
+              )}
+
               <Stepper
                 label="Fouls limit"
                 hint={`${foulsLimit} ${foulsLimit === 1 ? 'foul' : 'fouls'}`}
@@ -567,15 +1052,6 @@ export default function CreateGameScreen() {
                 onIncrement={() => setFoulsLimit((n) => Math.min(50, n + 1))}
                 canDecrement={foulsLimit > 0}
                 canIncrement={foulsLimit < 50}
-              />
-
-              <Stepper
-                label="Half / quarter duration"
-                hint={`${halfDurationMins} min`}
-                onDecrement={() => setHalfDurationMins((n) => Math.max(1, n - 1))}
-                onIncrement={() => setHalfDurationMins((n) => Math.min(90, n + 1))}
-                canDecrement={halfDurationMins > 1}
-                canIncrement={halfDurationMins < 90}
               />
 
               <View className="rounded-xl border border-muted-border bg-white px-4 py-3">
