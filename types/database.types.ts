@@ -2,9 +2,9 @@
  * Supabase generated-style database types for the PickUp `public` schema.
  * Keep in sync with `supabase/migrations/*.sql`.
  *
- * JSONB columns (`rules_penalties`, `event_data`) are typed as `Json` here,
- * matching `supabase gen types`. The strongly-typed JSONB shapes live in
- * `types/domain.ts`.
+ * JSONB columns (`rules_penalties`, `roles_required`, `game_structure`,
+ * `event_data`) are typed as `Json` here, matching `supabase gen types`. The
+ * strongly-typed JSONB shapes live in `types/domain.ts`.
  */
 
 export type Json =
@@ -60,6 +60,7 @@ export interface Database {
           roles_required: Json;
           player_limit: number | null;
           require_approval: boolean;
+          game_structure: Json;
           created_at: string;
         };
         Insert: {
@@ -76,6 +77,7 @@ export interface Database {
           roles_required?: Json;
           player_limit?: number | null;
           require_approval?: boolean;
+          game_structure?: Json;
           created_at?: string;
         };
         Update: {
@@ -92,6 +94,7 @@ export interface Database {
           roles_required?: Json;
           player_limit?: number | null;
           require_approval?: boolean;
+          game_structure?: Json;
           created_at?: string;
         };
         Relationships: [
@@ -262,7 +265,8 @@ export interface Database {
         | 'timer_start'
         | 'timer_pause'
         | 'penalty_foul'
-        | 'game_end';
+        | 'game_end'
+        | 'timer_adjust';
     };
     CompositeTypes: {};
   };
