@@ -17,7 +17,12 @@ export type RatingRow = Database['public']['Tables']['ratings']['Row'];
 
 /**
  * `games.rules_penalties`
- * `{ fouls_limit: integer, penalty_types: string[], half_duration_mins: integer }`
+ * `{ fouls_limit: integer, penalty_types: string[] }`
+ *
+ * `half_duration_mins` is LEGACY and no longer written on create (the timeline
+ * now lives in `games.game_structure`). It stays typed as REQUIRED here because
+ * `live-match.tsx` still reads it as the authoritative period length until the
+ * live-match wiring step lands; a later PR will drop it.
  */
 export interface RulesPenalties {
   fouls_limit: number;
@@ -149,10 +154,11 @@ export type EventDataMap = {
 /** Typed view of a game row with the JSONB columns narrowed. */
 export type Game = Omit<
   Database['public']['Tables']['games']['Row'],
-  'rules_penalties' | 'roles_required' | 'status'
+  'rules_penalties' | 'roles_required' | 'game_structure' | 'status'
 > & {
   rules_penalties: RulesPenalties;
   roles_required: RolesRequired;
+  game_structure: GameStructure;
   status: GameStatus;
 };
 

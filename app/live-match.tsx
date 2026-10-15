@@ -28,6 +28,7 @@ import type {
   Game,
   GameEventRow,
   GameParticipantRow,
+  GameStructure,
   RolesRequired,
   RulesPenalties,
 } from '@/types/domain';
@@ -50,6 +51,7 @@ function toGame(row: GamesRow): Game {
     ...row,
     rules_penalties: row.rules_penalties as unknown as RulesPenalties,
     roles_required: row.roles_required as unknown as RolesRequired,
+    game_structure: row.game_structure as unknown as GameStructure,
   };
 }
 
