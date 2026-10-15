@@ -19,11 +19,20 @@ export interface TimerState {
    * clock is paused/stopped. A non-null value means "running".
    */
   runningSince: number | null;
+  /**
+   * Banked stoppage/added time in milliseconds — the running sum of `delta_ms`
+   * across all `timer_adjust` events. This is a *separate, additive* quantity:
+   * it must survive pauses (unlike `accumulated`, which `timer_pause.elapsed_ms`
+   * overwrites), so added time is never folded into — or erased by — the elapsed
+   * clock. A negative delta removes time (undo/reset).
+   */
+  added_ms: number;
 }
 
 export const INITIAL_TIMER_STATE: TimerState = {
   accumulated: 0,
   runningSince: null,
+  added_ms: 0,
 };
 
 /**
@@ -57,6 +66,9 @@ export function sortEvents(events: GameEventRow[]): GameEventRow[] {
  *
  *   - `timer_start`  → begin (or restart) a run segment from the recorded wall time.
  *   - `timer_pause`  → commit the recorded elapsed milliseconds and stop the segment.
+ *   - `timer_adjust` → add (or, with a negative `delta_ms`, remove) banked added
+ *     time. It never touches `accumulated`/`runningSince`; `added_ms` is a separate
+ *     quantity that survives pauses (see `TimerState.added_ms`).
  *
  * All other event types are ignored by the timer. Replaying the same list always
  * yields the same `TimerState`, which is what makes the clock trustworthy.
@@ -74,6 +86,13 @@ export function reduceTimer(events: GameEventRow[]): TimerState {
       // A pause carries the authoritative elapsed total at that instant, so any
       // clock drift during the run segment is corrected here.
       state = { ...state, accumulated: elapsed_ms, runningSince: null };
+    } else if (event.event_type === 'timer_adjust') {
+      const { delta_ms } = eventData(event, 'timer_adjust');
+      // Added time is additive and independent of the run segment: folding it
+      // into `accumulated` would be erased by the next `timer_pause.elapsed_ms`
+      // overwrite. A reset is expressed by the caller as a negative delta
+      // (`-added_ms`), which lands `added_ms` back at 0 for the next period.
+      state = { ...state, added_ms: state.added_ms + delta_ms };
     }
   }
 
@@ -90,6 +109,22 @@ export function liveElapsedMs(state: TimerState, now: number = Date.now()): numb
     return state.accumulated;
   }
   return state.accumulated + Math.max(0, now - state.runningSince);
+}
+
+/**
+ * Remaining time in the current period at `now`, with banked added time included.
+ *
+ * The elapsed clock keeps counting up truthfully; added time extends the *target*
+ * (`periodMs + added_ms`) rather than rewinding the elapsed readout — the same way
+ * soccer presents stoppage time ("3 minutes added" on top of the scheduled period).
+ * Never returns below zero.
+ */
+export function remainingMs(
+  state: TimerState,
+  now: number,
+  periodMs: number,
+): number {
+  return Math.max(0, periodMs + state.added_ms - liveElapsedMs(state, now));
 }
 
 /**
