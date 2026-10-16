@@ -19,15 +19,15 @@ export type RatingRow = Database['public']['Tables']['ratings']['Row'];
  * `games.rules_penalties`
  * `{ fouls_limit: integer, penalty_types: string[] }`
  *
- * `half_duration_mins` is LEGACY and no longer written on create (the timeline
- * now lives in `games.game_structure`). It stays typed as REQUIRED here because
- * `live-match.tsx` still reads it as the authoritative period length until the
- * live-match wiring step lands; a later PR will drop it.
+ * `half_duration_mins` is LEGACY: it was the old two-half period length and is
+ * no longer written on create nor read anywhere — the timeline now lives in
+ * `games.game_structure`. Legacy rows may still carry the key in the JSONB (the
+ * migration keeps it for rollback), but it is intentionally absent from this
+ * type so nothing can silently depend on it again.
  */
 export interface RulesPenalties {
   fouls_limit: number;
   penalty_types: string[];
-  half_duration_mins: number;
 }
 
 /**

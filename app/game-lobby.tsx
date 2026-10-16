@@ -14,6 +14,7 @@ import Button from '@/components/Button';
 import { withErrorNotification } from '@/lib/async-mutation';
 import { useAuth } from '@/lib/auth-context';
 import { toErrorMessage } from '@/lib/errors';
+import { structureSummary } from '@/lib/game-structure';
 import {
   DEFAULT_USER_LOCATION,
   getUserLocation,
@@ -791,7 +792,7 @@ export default function GameLobbyScreen() {
                 {penaltyTypesOf(game.rules_penalties).length > 0
                   ? ` · ${penaltyTypesOf(game.rules_penalties).join(' · ')}`
                   : ''}{' '}
-                · {game.rules_penalties.half_duration_mins}-min halves
+                · {structureSummary(game.game_structure)}
               </Text>
             </View>
 

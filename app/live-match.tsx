@@ -18,8 +18,11 @@ import {
   formatClock,
   liveElapsedMs,
   reduceTimer,
+  remainingMs,
   sortEvents,
+  type TimerState,
 } from '@/lib/live-timer';
+import { resolveGamePhase, structureSummary } from '@/lib/game-structure';
 import { getSupabase, isSupabaseConfigured, SUPABASE_CONFIG_ERROR } from '@/lib/supabase';
 import type { Database, Json } from '@/types/database.types';
 import type {
@@ -312,8 +315,36 @@ export default function LiveMatchScreen() {
   }, [running]);
 
   const elapsedMs = useMemo(() => liveElapsedMs(timerState, now), [timerState, now]);
-  const periodMs = game ? game.rules_penalties.half_duration_mins * 60_000 : 0;
-  const remainingMs = Math.max(0, periodMs - elapsedMs);
+
+  // Structure-driven phase: which period / break / overtime the clock is in.
+  const structure = game?.game_structure ?? null;
+  const isFirstTo = structure?.format === 'first_to';
+  const phase = useMemo(
+    () => (structure && !isFirstTo ? resolveGamePhase(structure, elapsedMs) : null),
+    [structure, isFirstTo, elapsedMs],
+  );
+
+  // Remaining in the current phase. `remainingMs` measures elapsed from zero, so
+  // shift the reduced clock by the phase's start offset — the elapsed readout
+  // stays truthful (total) while the remaining counts down within the phase, and
+  // `added_ms` is folded into the target (period or break).
+  const remaining = useMemo(() => {
+    if (!phase || phase.kind === 'final') return 0;
+    const phaseState: TimerState = {
+      ...timerState,
+      accumulated: timerState.accumulated - phase.startMs,
+    };
+    return remainingMs(phaseState, now, phase.durationMs);
+  }, [phase, timerState, now]);
+
+  // The clock card's subtitle: phase label + remaining (period/OT) or a break
+  // countdown, and a bare "Final" once regulation (and any OT) is over.
+  const phaseLine = useMemo(() => {
+    if (!phase) return null;
+    if (phase.kind === 'final') return 'Final';
+    if (phase.kind === 'break') return `${phase.label} · ${formatClock(remaining)}`;
+    return `${phase.label} · Remaining ${formatClock(remaining)}`;
+  }, [phase, remaining]);
 
   // --- Score / foul derivation ------------------------------------------------------
   const totalScore = useMemo(() => {
@@ -524,35 +555,46 @@ export default function LiveMatchScreen() {
       </View>
 
       <ScrollView className="flex-1" contentContainerStyle={{ paddingBottom: 24 }}>
-        {/* Timer — dark "night court" hero */}
+        {/* Timer — dark "night court" hero. Score-based games show the target
+            instead of a clock. */}
         <View className="px-5 pt-5">
-          <View className="rounded-2xl bg-brand-900 px-6 py-6">
-            <View className="flex-row items-center justify-between">
+          {isFirstTo ? (
+            <View className="rounded-2xl bg-brand-900 px-6 py-6">
               <Text className="font-sans-600 text-caption uppercase tracking-wide text-brand-300">
-                Game clock
+                Run to score
               </Text>
-              <View
-                className={`rounded-full px-3 py-1 ${running ? 'bg-accent' : 'bg-brand-700'}`}
-              >
-                <Text
-                  className={`font-sans-600 text-caption ${
-                    running ? 'text-brand-900' : 'text-brand-300'
-                  }`}
-                >
-                  {running ? 'Running' : 'Paused'}
-                </Text>
-              </View>
+              <Text className="mt-3 text-center font-display text-4xl tabular-nums text-brand-50">
+                First to {structure?.target_score ?? 11} · win by {structure?.win_by ?? 2}
+              </Text>
             </View>
-            <Text className="mt-3 text-center font-display text-6xl tabular-nums text-brand-50">
-              {formatClock(elapsedMs)}
-            </Text>
-            {periodMs > 0 ? (
-              <Text className="mt-2 text-center font-sans text-body text-brand-300">
-                Period {game.rules_penalties.half_duration_mins} min · Remaining{' '}
-                {formatClock(remainingMs)}
+          ) : (
+            <View className="rounded-2xl bg-brand-900 px-6 py-6">
+              <View className="flex-row items-center justify-between">
+                <Text className="font-sans-600 text-caption uppercase tracking-wide text-brand-300">
+                  Game clock
+                </Text>
+                <View
+                  className={`rounded-full px-3 py-1 ${running ? 'bg-accent' : 'bg-brand-700'}`}
+                >
+                  <Text
+                    className={`font-sans-600 text-caption ${
+                      running ? 'text-brand-900' : 'text-brand-300'
+                    }`}
+                  >
+                    {running ? 'Running' : 'Paused'}
+                  </Text>
+                </View>
+              </View>
+              <Text className="mt-3 text-center font-display text-6xl tabular-nums text-brand-50">
+                {formatClock(elapsedMs)}
               </Text>
-            ) : null}
-          </View>
+              {phaseLine ? (
+                <Text className="mt-2 text-center font-sans text-body text-brand-300">
+                  {phaseLine}
+                </Text>
+              ) : null}
+            </View>
+          )}
         </View>
 
         {/* Scoreboard — dark, paired with the timer */}
@@ -596,8 +638,8 @@ export default function LiveMatchScreen() {
           </View>
         </View>
 
-        {/* Timekeeper controls */}
-        {canTimekeep ? (
+        {/* Timekeeper controls — score-based games have no clock to run. */}
+        {canTimekeep && !isFirstTo ? (
           <View className="px-5 pt-4">
             <Text className="mb-2 font-sans-600 text-caption uppercase tracking-wide text-brand-600">
               Timekeeper controls
@@ -790,9 +832,9 @@ export default function LiveMatchScreen() {
                 </Text>
               </View>
               <View className="flex-row justify-between">
-                <Text className="font-sans text-body text-muted">Period length</Text>
+                <Text className="font-sans text-body text-muted">Game structure</Text>
                 <Text className="font-sans-600 text-label text-muted-ink">
-                  {game.rules_penalties.half_duration_mins} min
+                  {structure ? structureSummary(structure) : '—'}
                 </Text>
               </View>
             </View>
