@@ -135,3 +135,135 @@ export function validateGameStructure(
 
   return errors.length === 0 ? { ok: true } : { ok: false, errors };
 }
+
+/**
+ * Short, plain-language restatement of a game structure for summary surfaces
+ * (game lobby, live-match rules checklist). Distinct from create-game's longer
+ * "read a sentence" line, which also carries the clock phrase + overtime.
+ *
+ *   halves    → "2 × 20 min halves"
+ *   quarters  → "4 × 10 min quarters"
+ *   periods   → "3 × 15 min periods"
+ *   single    → "60 min running block"
+ *   first_to  → "First to 11 · win by 2"
+ */
+export function structureSummary(s: GameStructure): string {
+  if (s.format === 'first_to') {
+    return `First to ${s.target_score ?? 11} · win by ${s.win_by ?? 2}`;
+  }
+  switch (s.format) {
+    case 'halves':
+      return `${s.period_count} × ${s.period_length_mins} min halves`;
+    case 'quarters':
+      return `${s.period_count} × ${s.period_length_mins} min quarters`;
+    case 'periods':
+      return `${s.period_count} × ${s.period_length_mins} min periods`;
+    case 'single':
+      return `${s.period_length_mins} min running block`;
+  }
+}
+
+/**
+ * The phase of the live clock at a given elapsed time, derived purely from
+ * `game_structure` + the single monotonic elapsed clock (`lib/live-timer.ts`).
+ * `first_to` games have no clock and are handled by the caller before this runs.
+ */
+export type LivePhaseKind = 'period' | 'break' | 'overtime' | 'final';
+
+export interface LivePhase {
+  kind: LivePhaseKind;
+  /** Human label: "Half 1 of 2", "Halftime", "Overtime", "Final", … */
+  label: string;
+  /** Cumulative elapsed (ms) at which this phase begins in the running clock. */
+  startMs: number;
+  /** Phase duration in ms (0 for `final`). */
+  durationMs: number;
+}
+
+/** "Half 1 of 2" / "Quarter 3 of 4" / "Period 2 of 3". */
+function periodLabel(format: GameFormat, index: number, total: number): string {
+  switch (format) {
+    case 'halves':
+      return `Half ${index} of ${total}`;
+    case 'quarters':
+      return `Quarter ${index} of ${total}`;
+    case 'periods':
+      return `Period ${index} of ${total}`;
+    case 'single':
+      return 'Game clock';
+    case 'first_to':
+      // Not reached — first_to games have no clock (guarded by the caller).
+      return `Period ${index} of ${total}`;
+  }
+}
+
+/** The intermission between periods: "Halftime" for halves, "Break" otherwise. */
+function breakLabel(format: GameFormat): string {
+  return format === 'halves' ? 'Halftime' : 'Break';
+}
+
+/**
+ * Resolve which phase of a timed game the clock is in, by walking the timeline
+ * `[period, (break), period, …, (break), period]` (+ optional overtime) against
+ * a single continuously-accumulating elapsed clock.
+ *
+ * The caller already derives `elapsedMs` from `lib/live-timer` and passes it in;
+ * no wall clock is consulted here, so the phase is deterministic across devices.
+ *
+ * Overtime: an OT phase is rendered whenever `overtime_length_mins` is set. The
+ * "tied after regulation" precondition from the design can't be evaluated against
+ * the current single-total-score scoreboard (there is no home/away split), so OT
+ * is shown whenever the host configured it. When two-team scores land, gate this
+ * on an actual tie.
+ */
+export function resolveGamePhase(structure: GameStructure, elapsedMs: number): LivePhase {
+  const periodMs = structure.period_length_mins * 60_000;
+  const breakMs = structure.break_length_mins * 60_000;
+  const overtimeMs = (structure.overtime_length_mins ?? 0) * 60_000;
+
+  let cursor = 0;
+  for (let i = 1; i <= structure.period_count; i++) {
+    const start = cursor;
+    const end = start + periodMs;
+    if (elapsedMs < end) {
+      return {
+        kind: 'period',
+        label: periodLabel(structure.format, i, structure.period_count),
+        startMs: start,
+        durationMs: periodMs,
+      };
+    }
+    cursor = end;
+
+    // Intermission only between periods (never after the last), and only when
+    // a break was actually configured.
+    if (i < structure.period_count && breakMs > 0) {
+      const breakEnd = cursor + breakMs;
+      if (elapsedMs < breakEnd) {
+        return {
+          kind: 'break',
+          label: breakLabel(structure.format),
+          startMs: cursor,
+          durationMs: breakMs,
+        };
+      }
+      cursor = breakEnd;
+    }
+  }
+
+  // Regulation is over. An OT period extends the timeline when configured.
+  if (overtimeMs > 0) {
+    const overtimeEnd = cursor + overtimeMs;
+    if (elapsedMs < overtimeEnd) {
+      return {
+        kind: 'overtime',
+        label: 'Overtime',
+        startMs: cursor,
+        durationMs: overtimeMs,
+      };
+    }
+    cursor = overtimeEnd;
+  }
+
+  return { kind: 'final', label: 'Final', startMs: cursor, durationMs: 0 };
+}
