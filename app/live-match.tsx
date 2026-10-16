@@ -49,6 +49,13 @@ type ViewMode = 'player' | 'timekeeper' | 'referee';
 /** Preset infractions for the referee's "Log foul" quick action. */
 const FOUL_PRESETS = ['Personal', 'Technical', 'Flagrant', 'Unsportsmanlike', 'Other'];
 
+/**
+ * Preset stoppage/added-time quick-add amounts (ms) for `running_added` games.
+ * The common soccer added-time values are whole minutes, so the ref banks +1/+2/+3
+ * with one tap — no numeric pad, no stepper (design §6.3).
+ */
+const ADD_PRESETS = [60_000, 120_000, 180_000] as const;
+
 function toGame(row: GamesRow): Game {
   return {
     ...row,
@@ -131,6 +138,11 @@ export default function LiveMatchScreen() {
   const [toast, setToast] = useState<{ message: string; tone: 'error' | 'success' } | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // The most recent successful quick-add amount (ms), used to render the transient
+  // "Undo +X:XX" affordance. `null` hides it. Auto-dismisses after ~4s.
+  const [lastAddedMs, setLastAddedMs] = useState<number | null>(null);
+  const undoTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const showToast = useCallback((message: string, tone: 'error' | 'success' = 'error') => {
     setToast({ message, tone });
     if (toastTimer.current) clearTimeout(toastTimer.current);
@@ -148,6 +160,7 @@ export default function LiveMatchScreen() {
   useEffect(() => {
     return () => {
       if (toastTimer.current) clearTimeout(toastTimer.current);
+      if (undoTimer.current) clearTimeout(undoTimer.current);
     };
   }, []);
 
@@ -319,6 +332,12 @@ export default function LiveMatchScreen() {
   // Structure-driven phase: which period / break / overtime the clock is in.
   const structure = game?.game_structure ?? null;
   const isFirstTo = structure?.format === 'first_to';
+  // The quick-add strip surfaces only for a running clock with banked stoppage
+  // time (`running_added`, e.g. soccer), and only to someone who can write the
+  // clock (host or checked-in timekeeper). Score-based `first_to` games have no
+  // clock, so the control never renders for them.
+  const isQuickAddVisible =
+    structure?.clock_mode === 'running_added' && canTimekeep && !isFirstTo;
   const phase = useMemo(
     () => (structure && !isFirstTo ? resolveGamePhase(structure, elapsedMs) : null),
     [structure, isFirstTo, elapsedMs],
@@ -327,13 +346,18 @@ export default function LiveMatchScreen() {
   // Remaining in the current phase. `remainingMs` measures elapsed from zero, so
   // shift the reduced clock by the phase's start offset — the elapsed readout
   // stays truthful (total) while the remaining counts down within the phase, and
-  // `added_ms` is folded into the target (period or break).
+  // `added_ms` is folded into the target (period or OT). Break/halftime phases are
+  // the exception: added time extends play periods, NEVER the intermission, so a
+  // break's remaining is computed without `added_ms`.
   const remaining = useMemo(() => {
     if (!phase || phase.kind === 'final') return 0;
     const phaseState: TimerState = {
       ...timerState,
       accumulated: timerState.accumulated - phase.startMs,
     };
+    if (phase.kind === 'break') {
+      return Math.max(0, phase.durationMs - liveElapsedMs(phaseState, now));
+    }
     return remainingMs(phaseState, now, phase.durationMs);
   }, [phase, timerState, now]);
 
@@ -444,6 +468,10 @@ export default function LiveMatchScreen() {
       // Compute the authoritative elapsed at the instant of the tap, so the pause
       // record reflects the true clock, not the last 1s render tick.
       const elapsed = liveElapsedMs(timerState, Date.now());
+      // Banked added time is read at tap time: Reset and Period End must zero it
+      // out (a negative `timer_adjust`) so stoppage never leaks into halftime or
+      // the next period (design §5.4 / §6.2).
+      const addedMs = timerState.added_ms;
       if (kind === 'start') {
         void runMutation(
           () => insertEvent('timer_start', { started_at: new Date().toISOString() }),
@@ -452,13 +480,53 @@ export default function LiveMatchScreen() {
       } else if (kind === 'pause') {
         void runMutation(() => insertEvent('timer_pause', { elapsed_ms: elapsed }), 'Timer paused');
       } else if (kind === 'reset') {
-        void runMutation(() => insertEvent('timer_pause', { elapsed_ms: 0 }), 'Timer reset');
+        void runMutation(async () => {
+          await insertEvent('timer_pause', { elapsed_ms: 0 });
+          if (addedMs !== 0) await insertEvent('timer_adjust', { delta_ms: -addedMs });
+        }, 'Timer reset');
       } else {
-        void runMutation(() => insertEvent('timer_pause', { elapsed_ms: elapsed }), 'Period ended');
+        void runMutation(async () => {
+          await insertEvent('timer_pause', { elapsed_ms: elapsed });
+          if (addedMs !== 0) await insertEvent('timer_adjust', { delta_ms: -addedMs });
+        }, 'Period ended');
       }
     },
     [runMutation, insertEvent, timerState],
   );
+
+  // Bank stoppage/added time (+1/+2/+3 min). On success, surface the transient
+  // "Undo +X:XX" affordance — the undo itself is the error recovery, so no
+  // pre-action confirmation dialog is needed (design §6.3).
+  const handleQuickAdd = useCallback(
+    async (deltaMs: number) => {
+      if (mutating) return;
+      setMutating(true);
+      setInlineError(null);
+      const result = await withErrorNotification(
+        () => insertEvent('timer_adjust', { delta_ms: deltaMs }),
+        notifyError,
+      );
+      setMutating(false);
+      if (result.error) return;
+      showToast(`Added ${formatClock(deltaMs)}`, 'success');
+      setLastAddedMs(deltaMs);
+      if (undoTimer.current) clearTimeout(undoTimer.current);
+      undoTimer.current = setTimeout(() => setLastAddedMs(null), 4000);
+    },
+    [mutating, notifyError, showToast, insertEvent],
+  );
+
+  // Reverse the last quick-add with an exact negative delta.
+  const handleUndoAdd = useCallback(() => {
+    if (lastAddedMs == null) return;
+    const delta = -lastAddedMs;
+    setLastAddedMs(null);
+    if (undoTimer.current) clearTimeout(undoTimer.current);
+    void runMutation(
+      () => insertEvent('timer_adjust', { delta_ms: delta }),
+      `Undid added ${formatClock(lastAddedMs)}`,
+    );
+  }, [lastAddedMs, runMutation, insertEvent]);
 
   const handleScore = useCallback(
     (playerId: string, points: number) => {
@@ -592,6 +660,52 @@ export default function LiveMatchScreen() {
                 <Text className="mt-2 text-center font-sans text-body text-brand-300">
                   {phaseLine}
                 </Text>
+              ) : null}
+              {structure?.clock_mode === 'running_added' && timerState.added_ms > 0 ? (
+                <View className="mt-2 self-center rounded-full bg-accent px-3 py-1">
+                  <Text className="font-sans-600 text-caption text-brand-900">
+                    Added +{formatClock(timerState.added_ms)}
+                  </Text>
+                </View>
+              ) : null}
+              {isQuickAddVisible ? (
+                <View className="mt-4">
+                  <View className="flex-row gap-2">
+                    {ADD_PRESETS.map((ms) => (
+                      <Pressable
+                        key={ms}
+                        onPress={() => void handleQuickAdd(ms)}
+                        disabled={mutating}
+                        className={`flex-1 items-center justify-center rounded-xl py-4 ${
+                          mutating ? 'bg-muted-soft' : 'bg-accent'
+                        }`}
+                      >
+                        <Text
+                          className={`font-sans-600 text-label ${
+                            mutating ? 'text-muted' : 'text-brand-900'
+                          }`}
+                        >
+                          +{ms / 60_000} min
+                        </Text>
+                      </Pressable>
+                    ))}
+                  </View>
+                  {lastAddedMs != null ? (
+                    <Pressable
+                      onPress={() => void handleUndoAdd()}
+                      disabled={mutating}
+                      className="mt-2 items-center justify-center rounded-xl py-3"
+                    >
+                      <Text
+                        className={`font-sans-600 text-label ${
+                          mutating ? 'text-muted' : 'text-accent'
+                        }`}
+                      >
+                        Undo +{formatClock(lastAddedMs)}
+                      </Text>
+                    </Pressable>
+                  ) : null}
+                </View>
               ) : null}
             </View>
           )}
