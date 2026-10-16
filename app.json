@@ -6,12 +6,23 @@
     "orientation": "portrait",
     "scheme": "pickup",
     "userInterfaceStyle": "light",
+    "icon": "./assets/icon.png",
     "web": {
       "bundler": "metro",
       "output": "single"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.pickup.app",
+      "buildNumber": "1"
+    },
+    "android": {
+      "package": "com.pickup.app",
+      "versionCode": 1,
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#0B0E0C"
+      }
     },
     "plugins": [
       "expo-router",
@@ -21,7 +32,22 @@
           "locationWhenInUsePermission": "PickUp uses your location to find nearby pickup games and to verify court check-in."
         }
       ],
-      "expo-font"
+      "expo-font",
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#0B0E0C",
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 200,
+          "resizeMode": "contain"
+        }
+      ],
+      [
+        "react-native-maps",
+        {
+          "androidGoogleMapsApiKey": "REPLACE_WITH_GOOGLE_MAPS_ANDROID_API_KEY"
+        }
+      ]
     ]
   }
 }
