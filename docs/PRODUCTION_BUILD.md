@@ -17,7 +17,7 @@ Everything below is blocked or gated on a short list of owner-provided items. Wh
 
 | # | Owner must provide / decide | Needed for | Cost (confirm before paying) |
 |---|------------------------------|------------|------------------------------|
-| 1 | **Confirm app identifiers** — `com.pickup.app` (iOS bundle id + Android package) is the proposed placeholder. Reverse-DNS from a domain you own is preferable. Both must be globally unique on their respective store. | First build | $0 |
+| 1 | **App identifiers — LOCKED** — `com.pickup.app` (iOS bundle id + Android package), confirmed by the owner on 2026-10-19. Both must still be globally unique when the store entries are created. | First build | $0 |
 | 2 | **Apple Developer Program** account (org + an App ID / cert) | iOS builds & App Store | ~$99/yr (confirm current price) |
 | 3 | **Google Play Console** account | Android builds & Play listing | $25 one-time (confirm current price) |
 | 4 | **Google Maps Android API key** (Google Cloud) | Android maps (react-native-maps) | Usage-based; free tier exists |
@@ -28,8 +28,9 @@ Everything below is blocked or gated on a short list of owner-provided items. Wh
 | 9 | **Decide OTA strategy** (add `expo-updates` + EAS Update — recommended) | JS-only releases w/o store resubmit | EAS has a free tier |
 | 10 | **Supabase env values per EAS profile** (see §7) | Builds talk to the right backend | $0 |
 
-**Decisions the lead/owner should ratify:** the identifiers (§2) and whether to adopt `expo-updates`
-now or later (§8). Everything else is a credential to supply, not a design decision.
+**Decision the lead/owner should still ratify:** whether to adopt `expo-updates` now or later (§8).
+The identifiers (§2) are already locked (owner decision, 2026-10-19). Everything else is a
+credential to supply, not a design decision.
 
 > **Naming note (flag to lead):** the team's `.env` and `lib/supabase.ts` use
 > `EXPO_PUBLIC_SUPABASE_ANON_KEY` (the anon/publishable key). An earlier brief referred to
@@ -83,18 +84,16 @@ there is no Expo account on this machine).
 
 ---
 
-## 2. App identifiers (PROPOSED — owner confirm)
+## 2. App identifiers (LOCKED — owner decision 2026-10-19)
 
-Both identifiers are placeholders and must be **globally unique** per store (iOS bundle IDs and
-Android package names are each claimed across the entire store, not per account).
+Both identifiers are **locked** to `com.pickup.app` (owner decision, 2026-10-19). They must still be
+**globally unique** when the store entries are actually created — iOS bundle IDs and Android package
+names are each claimed across the entire store, not per account. The owner accepted `com.pickup.app`
+as-is for now; if a collision surfaces at store-creation time, the identifier is a one-line change in
+`app.json` and can be re-locked to a domain-based ID (e.g. `com.pickupapp.app`) then.
 
 - **iOS `ios.bundleIdentifier`:** `com.pickup.app`
 - **Android `android.package`:** `com.pickup.app`
-
-Recommendation: if you own a domain (e.g. `pickupapp.com`), prefer a reverse-DNS identifier such as
-`com.pickupapp.app` (or `app.pickupapp`) to reduce collision risk and signal ownership. `pickup` is
-a common word, so `com.pickup.app` may already be taken — treat it as a working default until you
-confirm availability in **App Store Connect → Identifiers** and **Play Console → create app**.
 
 Also scaffolded (will auto-increment on production builds):
 - `ios.buildNumber`: `"1"` (CFBundleVersion)
